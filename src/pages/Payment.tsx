@@ -35,23 +35,30 @@ const Payment = () => {
     toast.success("결제가 완료되었습니다!");
   };
 
-  const BarcodeDisplay = ({ number }: { number: string }) => (
-    <div className="space-y-2">
-      <div className="flex gap-[2px] h-20 items-end justify-center bg-white p-2 rounded-lg">
-        {Array.from({ length: 40 }).map((_, i) => (
-          <div
-            key={i}
-            className="bg-black flex-1"
-            style={{
-              height: `${Math.random() * 40 + 60}%`,
-              minWidth: "2px",
-            }}
-          />
-        ))}
+  const BarcodeDisplay = ({ number }: { number: string }) => {
+    // 일반적인 바코드 패턴 생성 (검은색/흰색 바의 두께 패턴)
+    const pattern = number.split('').map(digit => 
+      parseInt(digit).toString(2).padStart(4, '0')
+    ).join('');
+    
+    return (
+      <div className="space-y-2">
+        <div className="flex gap-0 h-24 items-center justify-center bg-white p-3 rounded-lg">
+          {pattern.split('').map((bit, i) => (
+            <div
+              key={i}
+              className={bit === '1' ? 'bg-black' : 'bg-white'}
+              style={{
+                width: '3px',
+                height: '100%',
+              }}
+            />
+          ))}
+        </div>
+        <p className="text-center font-mono text-sm tracking-widest">{number}</p>
       </div>
-      <p className="text-center font-mono text-sm">{number}</p>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background pb-6">
