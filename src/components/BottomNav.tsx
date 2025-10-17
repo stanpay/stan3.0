@@ -7,7 +7,7 @@ const BottomNav = () => {
 
   const navItems = [
     { icon: Home, label: "결제", path: "/main" },
-    { icon: Gift, label: "기프티콘 판매", path: "/sell" },
+    { icon: Gift, label: "기프티콘", path: "/marketplace" },
     { icon: User, label: "마이페이지", path: "/mypage" },
   ];
 
