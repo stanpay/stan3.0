@@ -1,4 +1,4 @@
-import { MapPin, ArrowUpDown } from "lucide-react";
+import { MapPin, ArrowUpDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StoreCard from "@/components/StoreCard";
 import BottomNav from "@/components/BottomNav";
@@ -29,7 +29,7 @@ const Main = () => {
     <div className="min-h-screen bg-background pb-20">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95">
-        <div className="max-w-md mx-auto px-4 py-4">
+        <div className="max-w-md mx-auto px-4 py-4 space-y-3">
           <Link to="/location">
             <Button 
               variant="outline" 
@@ -39,6 +39,14 @@ const Main = () => {
               <span className="font-medium">현재 위치: 강남구 역삼동</span>
             </Button>
           </Link>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="매장 검색..."
+              className="w-full h-12 pl-10 pr-4 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
+            />
+          </div>
         </div>
       </header>
 
