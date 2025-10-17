@@ -14,7 +14,7 @@ const StoreCard = ({ id, name, distance, image }: StoreCardProps) => {
     <Link to={`/payment/${id}`}>
       <Card className="aspect-square overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-card border-border/50">
         <div className="h-full flex flex-col">
-          <div className="flex-1 bg-gradient-to-br from-primary/10 to-secondary/5 flex items-center justify-center p-4">
+          <div className="flex-1 bg-primary/10 flex items-center justify-center p-4">
             <div className="text-6xl">{image}</div>
           </div>
           <div className="p-4 bg-card">
