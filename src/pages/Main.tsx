@@ -1,18 +1,29 @@
-import { MapPin } from "lucide-react";
+import { MapPin, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StoreCard from "@/components/StoreCard";
 import BottomNav from "@/components/BottomNav";
 import { Link } from "react-router-dom";
+import { useState } from "react";
 
 const Main = () => {
-  const stores = [
-    { id: "baskin", name: "베스킨라빈스", distance: "250m", image: "🍦" },
-    { id: "starbucks", name: "스타벅스", distance: "320m", image: "☕" },
-    { id: "mega", name: "메가커피", distance: "450m", image: "☕" },
-    { id: "compose", name: "컴포즈커피", distance: "580m", image: "☕" },
-    { id: "ediya", name: "이디야커피", distance: "620m", image: "☕" },
-    { id: "paik", name: "백다방", distance: "740m", image: "☕" },
+  const [sortBy, setSortBy] = useState<"distance" | "discount">("distance");
+
+  const storesData = [
+    { id: "baskin", name: "베스킨라빈스", distance: "250m", distanceNum: 250, image: "🍦", maxDiscount: "3,000원", discountNum: 3000 },
+    { id: "starbucks", name: "스타벅스", distance: "320m", distanceNum: 320, image: "☕", maxDiscount: "2,500원", discountNum: 2500 },
+    { id: "mega", name: "메가커피", distance: "450m", distanceNum: 450, image: "☕", maxDiscount: "1,800원", discountNum: 1800 },
+    { id: "compose", name: "컴포즈커피", distance: "580m", distanceNum: 580, image: "☕", maxDiscount: "2,200원", discountNum: 2200 },
+    { id: "ediya", name: "이디야커피", distance: "620m", distanceNum: 620, image: "☕", maxDiscount: "1,500원", discountNum: 1500 },
+    { id: "paik", name: "백다방", distance: "740m", distanceNum: 740, image: "☕", maxDiscount: "1,200원", discountNum: 1200 },
   ];
+
+  const stores = [...storesData].sort((a, b) => {
+    if (sortBy === "distance") {
+      return a.distanceNum - b.distanceNum;
+    } else {
+      return b.discountNum - a.discountNum;
+    }
+  });
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -33,9 +44,22 @@ const Main = () => {
 
       {/* Store Grid */}
       <main className="max-w-md mx-auto px-4 py-6">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold mb-2">결제 가능 매장</h2>
-          <p className="text-muted-foreground">거리 순으로 정렬됩니다</p>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold mb-2">결제 가능 매장</h2>
+            <p className="text-muted-foreground">
+              {sortBy === "distance" ? "거리 순으로 정렬됩니다" : "최대 할인금액 순으로 정렬됩니다"}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSortBy(sortBy === "distance" ? "discount" : "distance")}
+            className="flex items-center gap-2"
+          >
+            <ArrowUpDown className="w-4 h-4" />
+            {sortBy === "distance" ? "거리순" : "할인순"}
+          </Button>
         </div>
 
         <div className="grid grid-cols-2 gap-4 animate-fade-in">
