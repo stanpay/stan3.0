@@ -59,6 +59,11 @@ const Marketplace = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20">
+      {/* Top Banner */}
+      <div className="bg-primary text-primary-foreground py-3 text-center font-semibold">
+        타상품 교환불가 기프티콘
+      </div>
+
       {/* Header */}
       <div className="sticky top-0 z-40 bg-background border-b border-border">
         <div className="max-w-md mx-auto px-4 py-4">
