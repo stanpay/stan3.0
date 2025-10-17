@@ -1,15 +1,17 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Upload, Image as ImageIcon } from "lucide-react";
+import { Upload, ArrowLeft } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
 
 const Sell = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -30,7 +32,15 @@ const Sell = () => {
   return (
     <div className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-40 bg-card border-b border-border">
-        <div className="max-w-md mx-auto px-4 py-4">
+        <div className="max-w-md mx-auto px-4 py-4 flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate(-1)}
+            className="shrink-0"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
           <h1 className="text-xl font-bold">기프티콘 판매</h1>
         </div>
       </header>

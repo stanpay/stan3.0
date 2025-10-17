@@ -86,7 +86,6 @@ const Marketplace = () => {
           <span className="text-muted-foreground">▼</span>
         </div>
         <div className="flex items-center gap-3 text-muted-foreground">
-          <span className="text-primary">팔라케어</span>
           <Filter className="w-5 h-5" />
           <ArrowUpDown className="w-5 h-5" />
         </div>
