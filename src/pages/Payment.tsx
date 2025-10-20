@@ -147,7 +147,7 @@ const Payment = () => {
         </div>
       </header>
 
-      <main className={`max-w-md mx-auto px-4 py-6 ${step === 2 ? 'h-screen flex flex-col overflow-hidden' : 'space-y-4'}`}>
+      <main className={`max-w-md mx-auto px-4 ${step === 2 ? 'h-[calc(100vh-73px)] flex flex-col' : 'py-6 space-y-4'}`}>
         {step === 1 ? (
           <>
             {/* Payment Method Selection */}
@@ -257,9 +257,9 @@ const Payment = () => {
         ) : (
           <>
             {/* Step 2: Vertical Scroll View - Fixed Layout */}
-            <div className="flex gap-4 flex-1 overflow-hidden">
+            <div className="flex gap-3 h-full py-6">
               {/* Progress Mini Bar - Vertical */}
-              <div className="flex flex-col gap-1.5 justify-center">
+              <div className="flex flex-col gap-1.5 justify-center py-4">
                 {Array.from({ length: totalCards }).map((_, index) => (
                   <div
                     key={index}
@@ -272,24 +272,27 @@ const Payment = () => {
                 ))}
               </div>
 
-              {/* Scrollable Card Container with Snap */}
-              <div 
-                className="flex-1 overflow-y-auto snap-y snap-mandatory"
-                style={{
-                  scrollSnapType: 'y mandatory',
-                }}
-                onScroll={(e) => {
-                  const container = e.currentTarget;
-                  const scrollTop = container.scrollTop;
-                  const cardHeight = container.scrollHeight / totalCards;
-                  const newIndex = Math.round(scrollTop / cardHeight);
-                  
-                  if (newIndex !== currentCardIndex && newIndex >= 0 && newIndex < totalCards) {
-                    setCurrentCardIndex(newIndex);
-                  }
-                }}
-              >
-                <div className="space-y-4">
+              {/* Main Content Area */}
+              <div className="flex-1 flex flex-col min-h-0">
+                {/* Scrollable Card Container with Snap - No scrollbar */}
+                <div 
+                  className="flex-1 overflow-y-auto snap-y snap-mandatory scrollbar-hide"
+                  style={{
+                    scrollSnapType: 'y mandatory',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                  }}
+                  onScroll={(e) => {
+                    const container = e.currentTarget;
+                    const scrollTop = container.scrollTop;
+                    const cardHeight = container.scrollHeight / totalCards;
+                    const newIndex = Math.round(scrollTop / cardHeight);
+                    
+                    if (newIndex !== currentCardIndex && newIndex >= 0 && newIndex < totalCards) {
+                      setCurrentCardIndex(newIndex);
+                    }
+                  }}
+                >
                   {/* Gifticon Cards */}
                   {purchasedGifticons.map((id) => {
                     const gifticon = gifticons.find(g => g.id === id);
@@ -298,9 +301,9 @@ const Payment = () => {
                     return (
                       <div
                         key={`gifticon-${id}`}
-                        className="snap-center h-[calc(100vh-280px)] flex items-center"
+                        className="snap-start h-full flex flex-col justify-start pt-4"
                       >
-                        <Card className="w-full p-4 rounded-2xl border-border/50">
+                        <Card className="p-4 rounded-2xl border-border/50">
                           <div className="space-y-3">
                             <BarcodeDisplay number={`8801234${id.toString().padStart(6, "0")}`} />
                             <div className="flex items-center gap-3">
@@ -319,8 +322,8 @@ const Payment = () => {
                   })}
 
                   {/* Membership Card */}
-                  <div className="snap-center h-[calc(100vh-280px)] flex items-center">
-                    <Card className="w-full p-4 rounded-2xl border-border/50">
+                  <div className="snap-start h-full flex flex-col justify-start pt-4">
+                    <Card className="p-4 rounded-2xl border-border/50">
                       <div className="space-y-3">
                         <BarcodeDisplay number="1234567890123" />
                         <div className="space-y-2">
@@ -350,18 +353,17 @@ const Payment = () => {
                     </Card>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Fixed Bottom Section */}
-            <div className="pt-4">
-              {/* Payment Method Selection Button */}
-              <Button
-                onClick={handlePayment}
-                className="w-full h-14 text-lg font-semibold rounded-xl"
-              >
-                결제수단 선택
-              </Button>
+                {/* Fixed Bottom Button */}
+                <div className="pt-4 pb-2">
+                  <Button
+                    onClick={handlePayment}
+                    className="w-full h-14 text-lg font-semibold rounded-xl"
+                  >
+                    결제수단 선택
+                  </Button>
+                </div>
+              </div>
             </div>
           </>
         )}
