@@ -257,9 +257,9 @@ const Payment = () => {
         ) : (
           <>
             {/* Step 2: Vertical Scroll View - Fixed Layout */}
-            <div className="flex gap-3 h-full py-6">
+            <div className="flex gap-3 h-full py-6 overflow-hidden">
               {/* Progress Mini Bar - Vertical */}
-              <div className="flex flex-col gap-1.5 justify-center py-4">
+              <div className="flex flex-col gap-1.5 justify-start pt-4">
                 {Array.from({ length: totalCards }).map((_, index) => (
                   <div
                     key={index}
@@ -273,10 +273,10 @@ const Payment = () => {
               </div>
 
               {/* Main Content Area */}
-              <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Scrollable Card Container with Snap - No scrollbar */}
                 <div 
-                  className="flex-1 overflow-y-auto snap-y snap-mandatory scrollbar-hide"
+                  className="flex-1 overflow-y-auto snap-y snap-mandatory scrollbar-hide pb-4"
                   style={{
                     scrollSnapType: 'y mandatory',
                     scrollbarWidth: 'none',
@@ -284,12 +284,23 @@ const Payment = () => {
                   }}
                   onScroll={(e) => {
                     const container = e.currentTarget;
-                    const scrollTop = container.scrollTop;
-                    const cardHeight = container.scrollHeight / totalCards;
-                    const newIndex = Math.round(scrollTop / cardHeight);
+                    const cards = Array.from(container.children);
+                    let minDistance = Infinity;
+                    let closestIndex = 0;
                     
-                    if (newIndex !== currentCardIndex && newIndex >= 0 && newIndex < totalCards) {
-                      setCurrentCardIndex(newIndex);
+                    cards.forEach((card, index) => {
+                      const rect = (card as HTMLElement).getBoundingClientRect();
+                      const containerRect = container.getBoundingClientRect();
+                      const distance = Math.abs(rect.top - containerRect.top);
+                      
+                      if (distance < minDistance) {
+                        minDistance = distance;
+                        closestIndex = index;
+                      }
+                    });
+                    
+                    if (closestIndex !== currentCardIndex) {
+                      setCurrentCardIndex(closestIndex);
                     }
                   }}
                 >
@@ -301,7 +312,7 @@ const Payment = () => {
                     return (
                       <div
                         key={`gifticon-${id}`}
-                        className="snap-start h-full flex flex-col justify-start pt-4"
+                        className="snap-start mb-4"
                       >
                         <Card className="p-4 rounded-2xl border-border/50">
                           <div className="space-y-3">
@@ -322,7 +333,7 @@ const Payment = () => {
                   })}
 
                   {/* Membership Card */}
-                  <div className="snap-start h-full flex flex-col justify-start pt-4">
+                  <div className="snap-start">
                     <Card className="p-4 rounded-2xl border-border/50">
                       <div className="space-y-3">
                         <BarcodeDisplay number="1234567890123" />
@@ -355,7 +366,7 @@ const Payment = () => {
                 </div>
 
                 {/* Fixed Bottom Button */}
-                <div className="pt-4 pb-2">
+                <div className="flex-shrink-0 pt-4">
                   <Button
                     onClick={handlePayment}
                     className="w-full h-14 text-lg font-semibold rounded-xl"
