@@ -135,7 +135,7 @@ const Payment = () => {
 
   return (
     <div className="min-h-screen bg-background pb-6">
-      <main className={`max-w-md mx-auto px-4 ${step === 2 ? 'h-screen flex flex-col' : 'py-6 space-y-4'}`}>
+      <main className={`max-w-md mx-auto ${step === 2 ? 'h-screen flex flex-col pl-16 pr-4' : 'px-4 py-6 space-y-4'}`}>
         {/* Back Button */}
         <div className="absolute top-4 left-4 z-50">
           {step === 2 ? (
