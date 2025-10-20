@@ -134,8 +134,8 @@ const Payment = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-6">
-      <main className={`max-w-md mx-auto ${step === 2 ? 'h-screen flex flex-col pl-14 pr-4' : 'px-4 py-6 space-y-4'}`}>
+    <div className={`bg-background ${step === 2 ? 'h-screen overflow-hidden' : 'min-h-screen pb-6'}`}>
+      <main className={`max-w-md mx-auto ${step === 2 ? 'h-full flex flex-col pl-14 pr-4 overflow-hidden' : 'px-4 py-6 space-y-4'}`}>
         {/* Back Button */}
         {step === 1 && (
           <div className="absolute top-4 left-4 z-50">
@@ -256,7 +256,7 @@ const Payment = () => {
           <>
             {/* Step 2: Vertical Scroll View - Fixed Layout */}
             {/* Left Side - Back Button and Mini Bar */}
-            <div className="absolute left-2 top-6 flex flex-col gap-3 z-50">
+            <div className="absolute left-2 top-4 flex flex-col gap-3 z-50">
               {/* Back Button */}
               <Button 
                 variant="ghost" 
@@ -282,18 +282,17 @@ const Payment = () => {
               </div>
             </div>
 
-            <div className="flex h-full pt-6 pb-6 overflow-hidden">
-              {/* Main Content Area */}
-              <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-                {/* Scrollable Card Container with Snap - No scrollbar */}
-                <div 
-                  className="flex-1 overflow-y-scroll snap-y snap-mandatory scrollbar-hide min-h-0"
-                  style={{
-                    scrollSnapType: 'y mandatory',
-                    scrollbarWidth: 'none',
-                    msOverflowStyle: 'none',
-                    WebkitOverflowScrolling: 'touch',
-                  }}
+            {/* Main Content Area - Full Height */}
+            <div className="flex flex-col h-full py-4 overflow-hidden">
+              {/* Scrollable Card Container with Snap - No scrollbar */}
+              <div 
+                className="flex-1 overflow-y-scroll snap-y snap-mandatory scrollbar-hide"
+                style={{
+                  scrollSnapType: 'y mandatory',
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                  WebkitOverflowScrolling: 'touch',
+                }}
                   onScroll={(e) => {
                     const container = e.currentTarget;
                     const cards = Array.from(container.children);
@@ -386,17 +385,16 @@ const Payment = () => {
                       </div>
                     </Card>
                   </div>
-                </div>
+              </div>
 
-                {/* Fixed Bottom Button */}
-                <div className="flex-shrink-0 pt-4">
-                  <Button
-                    onClick={handlePayment}
-                    className="w-full h-14 text-lg font-semibold rounded-xl"
-                  >
-                    결제수단 선택
-                  </Button>
-                </div>
+              {/* Fixed Bottom Button */}
+              <div className="flex-shrink-0 pt-4">
+                <Button
+                  onClick={handlePayment}
+                  className="w-full h-14 text-lg font-semibold rounded-xl"
+                >
+                  결제수단 선택
+                </Button>
               </div>
             </div>
           </>
