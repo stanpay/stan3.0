@@ -276,11 +276,12 @@ const Payment = () => {
               <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Scrollable Card Container with Snap - No scrollbar */}
                 <div 
-                  className="flex-1 overflow-y-auto snap-y snap-mandatory scrollbar-hide pb-4"
+                  className="flex-1 overflow-y-scroll snap-y snap-mandatory scrollbar-hide"
                   style={{
                     scrollSnapType: 'y mandatory',
                     scrollbarWidth: 'none',
                     msOverflowStyle: 'none',
+                    WebkitOverflowScrolling: 'touch',
                   }}
                   onScroll={(e) => {
                     const container = e.currentTarget;
@@ -305,14 +306,19 @@ const Payment = () => {
                   }}
                 >
                   {/* Gifticon Cards */}
-                  {purchasedGifticons.map((id) => {
+                  {purchasedGifticons.map((id, index) => {
                     const gifticon = gifticons.find(g => g.id === id);
                     if (!gifticon) return null;
                     
                     return (
                       <div
                         key={`gifticon-${id}`}
-                        className="snap-start mb-4"
+                        className="snap-start w-full flex-shrink-0"
+                        style={{
+                          scrollSnapAlign: 'start',
+                          scrollSnapStop: 'always',
+                          marginBottom: index === purchasedGifticons.length - 1 && totalCards === purchasedGifticons.length ? '0' : '1rem'
+                        }}
                       >
                         <Card className="p-4 rounded-2xl border-border/50">
                           <div className="space-y-3">
@@ -333,7 +339,13 @@ const Payment = () => {
                   })}
 
                   {/* Membership Card */}
-                  <div className="snap-start">
+                  <div 
+                    className="snap-start w-full flex-shrink-0"
+                    style={{
+                      scrollSnapAlign: 'start',
+                      scrollSnapStop: 'always',
+                    }}
+                  >
                     <Card className="p-4 rounded-2xl border-border/50">
                       <div className="space-y-3">
                         <BarcodeDisplay number="1234567890123" />
