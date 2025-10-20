@@ -354,12 +354,7 @@ const Payment = () => {
             </div>
 
             {/* Fixed Bottom Section */}
-            <div className="space-y-4 pt-4">
-              {/* Card Counter */}
-              <p className="text-center text-sm text-muted-foreground">
-                {currentCardIndex + 1} / {totalCards}
-              </p>
-
+            <div className="pt-4">
               {/* Payment Method Selection Button */}
               <Button
                 onClick={handlePayment}
