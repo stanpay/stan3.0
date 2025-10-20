@@ -135,26 +135,17 @@ const Payment = () => {
 
   return (
     <div className="min-h-screen bg-background pb-6">
-      <main className={`max-w-md mx-auto ${step === 2 ? 'h-screen flex flex-col pl-16 pr-4' : 'px-4 py-6 space-y-4'}`}>
+      <main className={`max-w-md mx-auto ${step === 2 ? 'h-screen flex flex-col pl-14 pr-4' : 'px-4 py-6 space-y-4'}`}>
         {/* Back Button */}
-        <div className="absolute top-4 left-4 z-50">
-          {step === 2 ? (
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="rounded-full"
-              onClick={() => setStep(1)}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-          ) : (
+        {step === 1 && (
+          <div className="absolute top-4 left-4 z-50">
             <Link to="/main">
               <Button variant="ghost" size="icon" className="rounded-full">
                 <ArrowLeft className="w-5 h-5" />
               </Button>
             </Link>
-          )}
-        </div>
+          </div>
+        )}
         {step === 1 ? (
           <>
             {/* Payment Method Selection */}
@@ -264,9 +255,20 @@ const Payment = () => {
         ) : (
           <>
             {/* Step 2: Vertical Scroll View - Fixed Layout */}
-            <div className="flex gap-3 h-full py-6 overflow-hidden">
+            {/* Left Side - Back Button and Mini Bar */}
+            <div className="absolute left-2 top-4 flex flex-col gap-3 z-50">
+              {/* Back Button */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="rounded-full"
+                onClick={() => setStep(1)}
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+              
               {/* Progress Mini Bar - Vertical */}
-              <div className="flex flex-col gap-1.5 justify-start pt-4">
+              <div className="flex flex-col gap-1.5">
                 {Array.from({ length: totalCards }).map((_, index) => (
                   <div
                     key={index}
@@ -278,7 +280,9 @@ const Payment = () => {
                   />
                 ))}
               </div>
+            </div>
 
+            <div className="flex h-full py-6 overflow-hidden">
               {/* Main Content Area */}
               <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Scrollable Card Container with Snap - No scrollbar */}
