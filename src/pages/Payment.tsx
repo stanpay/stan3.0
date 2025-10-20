@@ -390,7 +390,7 @@ const Payment = () => {
             </div>
 
             {/* Fixed Bottom Button - Outside of card container */}
-            <div className="absolute bottom-4 left-14 right-4">
+            <div className="absolute bottom-4 left-4 right-4">
               <Button
                 onClick={handlePayment}
                 className="w-full h-14 text-lg font-semibold rounded-xl"
