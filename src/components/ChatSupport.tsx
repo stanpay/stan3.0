@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MessageCircle, X, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { useLocation } from "react-router-dom";
 
 interface Message {
   id: number;
@@ -13,6 +15,8 @@ interface Message {
 }
 
 const ChatSupport = () => {
+  const location = useLocation();
+  const chatRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -23,6 +27,43 @@ const ChatSupport = () => {
     },
   ]);
   const [inputValue, setInputValue] = useState("");
+  const [includeCurrentPage, setIncludeCurrentPage] = useState(true);
+
+  const getPageName = (path: string) => {
+    const pageNames: Record<string, string> = {
+      "/": "로그인",
+      "/main": "메인",
+      "/location": "위치 설정",
+      "/marketplace": "마켓플레이스",
+      "/sell": "판매하기",
+      "/payment": "결제",
+      "/mypage": "마이페이지",
+      "/my-gifticons": "내 기프티콘",
+      "/history": "결제 내역",
+      "/payment-methods": "결제 수단",
+    };
+    
+    const basePath = "/" + path.split("/")[1];
+    return pageNames[basePath] || pageNames[path] || "기타";
+  };
+
+  const currentPageName = getPageName(location.pathname);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (chatRef.current && !chatRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
 
   const handleSend = () => {
     if (!inputValue.trim()) return;
@@ -64,7 +105,7 @@ const ChatSupport = () => {
 
       {/* Chat Popup */}
       {isOpen && (
-        <Card className="fixed bottom-6 right-6 w-96 h-[500px] shadow-2xl z-50 flex flex-col animate-scale-in">
+        <Card ref={chatRef} className="fixed bottom-6 right-6 w-96 h-[500px] shadow-2xl z-50 flex flex-col animate-scale-in">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-border bg-primary text-primary-foreground rounded-t-lg">
             <div className="flex items-center gap-2">
@@ -113,6 +154,17 @@ const ChatSupport = () => {
               ))}
             </div>
           </ScrollArea>
+
+          {/* Current Page Toggle */}
+          <div className="px-4 py-2 border-t border-border">
+            <Badge
+              variant={includeCurrentPage ? "default" : "outline"}
+              className="cursor-pointer"
+              onClick={() => setIncludeCurrentPage(!includeCurrentPage)}
+            >
+              {currentPageName} 페이지 {includeCurrentPage ? "✓" : ""}
+            </Badge>
+          </div>
 
           {/* Input */}
           <div className="p-4 border-t border-border">
