@@ -20,6 +20,8 @@ const MyGifticons = () => {
   const [filterStatus, setFilterStatus] = useState<"전체" | "사용가능" | "사용완료" | "판매완료">("전체");
   const [subFilter, setSubFilter] = useState<"전체" | "보유중" | "판매중">("전체");
   const [sellingStatus, setSellingStatus] = useState<Record<number, boolean>>({});
+  const [restoredStatus, setRestoredStatus] = useState<Record<number, boolean>>({});
+  const [gifticonStatus, setGifticonStatus] = useState<Record<number, "사용가능" | "사용완료" | "판매완료">>({});
 
   const gifticons: Gifticon[] = [
     {
@@ -79,8 +81,11 @@ const MyGifticons = () => {
   ];
 
   const filteredGifticons = gifticons.filter((gifticon) => {
+    // 현재 기프티콘의 실제 상태 확인 (복구되었으면 사용가능으로 처리)
+    const currentStatus = gifticonStatus[gifticon.id] || gifticon.status;
+    
     // 먼저 상위 필터 적용
-    if (filterStatus !== "전체" && gifticon.status !== filterStatus) {
+    if (filterStatus !== "전체" && currentStatus !== filterStatus) {
       return false;
     }
     
@@ -101,6 +106,17 @@ const MyGifticons = () => {
     setSellingStatus(prev => ({
       ...prev,
       [id]: !prev[id]
+    }));
+  };
+
+  const restoreGifticon = (id: number) => {
+    setGifticonStatus(prev => ({
+      ...prev,
+      [id]: "사용가능"
+    }));
+    setRestoredStatus(prev => ({
+      ...prev,
+      [id]: true
     }));
   };
 
@@ -194,17 +210,28 @@ const MyGifticons = () => {
       {/* Gifticons Grid */}
       <div className="max-w-md mx-auto px-4 py-4">
         <div className="grid grid-cols-2 gap-4">
-          {filteredGifticons.map((gifticon) => (
+          {filteredGifticons.map((gifticon) => {
+            const currentStatus = gifticonStatus[gifticon.id] || gifticon.status;
+            const isRestored = restoredStatus[gifticon.id];
+            
+            return (
             <Card
               key={gifticon.id}
               className="overflow-hidden hover:shadow-lg transition-shadow w-full"
             >
               <div className="aspect-square bg-card flex items-center justify-center p-4 border-b border-border relative overflow-hidden">
                 <div className="text-7xl">{gifticon.image}</div>
-                {gifticon.status === "사용완료" && (
+                {currentStatus === "사용완료" && (
                   <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
                     <Badge variant="secondary" className="text-sm whitespace-nowrap">
                       사용완료
+                    </Badge>
+                  </div>
+                )}
+                {isRestored && currentStatus === "사용가능" && (
+                  <div className="absolute top-2 right-2">
+                    <Badge variant="default" className="text-xs whitespace-nowrap">
+                      복구됨
                     </Badge>
                   </div>
                 )}
@@ -217,11 +244,11 @@ const MyGifticons = () => {
                 <div className="flex items-center justify-between">
                   <Badge
                     variant={
-                      gifticon.status === "사용가능" ? "default" : "secondary"
+                      currentStatus === "사용가능" ? "default" : "secondary"
                     }
                     className="text-xs whitespace-nowrap"
                   >
-                    {gifticon.status}
+                    {currentStatus}
                   </Badge>
                 </div>
                 <p className="text-lg font-bold text-foreground">
@@ -231,7 +258,7 @@ const MyGifticons = () => {
                 <p className="text-xs text-muted-foreground">
                   ~{gifticon.expiryDate}
                 </p>
-                {gifticon.status === "사용가능" && (
+                {currentStatus === "사용가능" && (
                   <Button
                     variant={sellingStatus[gifticon.id] ? "secondary" : "default"}
                     size="sm"
@@ -241,9 +268,19 @@ const MyGifticons = () => {
                     {sellingStatus[gifticon.id] ? "판매중" : "판매하기"}
                   </Button>
                 )}
+                {currentStatus === "사용완료" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-2"
+                    onClick={() => restoreGifticon(gifticon.id)}
+                  >
+                    복구
+                  </Button>
+                )}
               </div>
             </Card>
-          ))}
+          )})}
         </div>
       </div>
 
