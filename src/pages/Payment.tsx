@@ -284,7 +284,7 @@ const Payment = () => {
 
             {/* Main Content Area - Full Height */}
             <div className="flex flex-col h-full py-4 overflow-hidden">
-              {/* Scrollable Card Container with Snap - No scrollbar */}
+              {/* Scrollable Card Container with Snap */}
               <div 
                 className="flex-1 overflow-y-scroll snap-y snap-mandatory scrollbar-hide"
                 style={{
@@ -293,28 +293,29 @@ const Payment = () => {
                   msOverflowStyle: 'none',
                   WebkitOverflowScrolling: 'touch',
                 }}
-                  onScroll={(e) => {
-                    const container = e.currentTarget;
-                    const cards = Array.from(container.children);
-                    let minDistance = Infinity;
-                    let closestIndex = 0;
+                onScroll={(e) => {
+                  const container = e.currentTarget;
+                  const cards = Array.from(container.children);
+                  let minDistance = Infinity;
+                  let closestIndex = 0;
+                  
+                  cards.forEach((card, index) => {
+                    const rect = (card as HTMLElement).getBoundingClientRect();
+                    const containerRect = container.getBoundingClientRect();
+                    const distance = Math.abs(rect.top - containerRect.top);
                     
-                    cards.forEach((card, index) => {
-                      const rect = (card as HTMLElement).getBoundingClientRect();
-                      const containerRect = container.getBoundingClientRect();
-                      const distance = Math.abs(rect.top - containerRect.top);
-                      
-                      if (distance < minDistance) {
-                        minDistance = distance;
-                        closestIndex = index;
-                      }
-                    });
-                    
-                    if (closestIndex !== currentCardIndex) {
-                      setCurrentCardIndex(closestIndex);
+                    if (distance < minDistance) {
+                      minDistance = distance;
+                      closestIndex = index;
                     }
-                  }}
-                >
+                  });
+                  
+                  if (closestIndex !== currentCardIndex) {
+                    setCurrentCardIndex(closestIndex);
+                  }
+                }}
+              >
+                <div className="space-y-4">
                   {/* Gifticon Cards */}
                   {purchasedGifticons.map((id, index) => {
                     const gifticon = gifticons.find(g => g.id === id);
@@ -323,11 +324,10 @@ const Payment = () => {
                     return (
                       <div
                         key={`gifticon-${id}`}
-                        className="snap-start w-full flex-shrink-0"
+                        className="snap-start"
                         style={{
                           scrollSnapAlign: 'start',
                           scrollSnapStop: 'always',
-                          marginBottom: index === purchasedGifticons.length - 1 && totalCards === purchasedGifticons.length ? '0' : '1rem'
                         }}
                       >
                         <Card className="p-4 rounded-2xl border-border/50">
@@ -350,7 +350,7 @@ const Payment = () => {
 
                   {/* Membership Card */}
                   <div 
-                    className="snap-start w-full flex-shrink-0"
+                    className="snap-start"
                     style={{
                       scrollSnapAlign: 'start',
                       scrollSnapStop: 'always',
@@ -385,10 +385,11 @@ const Payment = () => {
                       </div>
                     </Card>
                   </div>
+                </div>
               </div>
 
               {/* Fixed Bottom Button */}
-              <div className="flex-shrink-0 pt-4">
+              <div className="flex-shrink-0 pt-4 pb-2">
                 <Button
                   onClick={handlePayment}
                   className="w-full h-14 text-lg font-semibold rounded-xl"
