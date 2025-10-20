@@ -9,17 +9,17 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary/20 via-secondary/10 to-background px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4">
       <div className="w-full max-w-md animate-fade-in">
         <div className="text-center mb-12">
-          <div className="w-24 h-24 bg-gradient-to-br from-primary to-secondary rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-lg">
-            <MessageCircle className="w-12 h-12 text-primary-foreground" />
+          <div className="w-20 h-20 bg-primary rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg">
+            <MessageCircle className="w-10 h-10 text-primary-foreground" />
           </div>
-          <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            기프티콘 페이
+          <h1 className="text-4xl font-bold mb-3 text-foreground">
+            스탠
           </h1>
           <p className="text-muted-foreground text-lg">
-            결제하고 기프티콘 받자!
+            결제의 기준이 되다
           </p>
         </div>
 
@@ -50,8 +50,7 @@ const Login = () => {
 
         <div className="mt-8 text-center">
           <p className="text-sm text-muted-foreground">
-            매장에서 결제하면 자동으로 기프티콘을 추천받고<br />
-            구매할 수 있는 혁신적인 결제 플랫폼
+            심플하고 스마트한 결제 경험
           </p>
         </div>
       </div>
