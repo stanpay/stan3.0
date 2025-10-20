@@ -138,11 +138,22 @@ const Payment = () => {
       <main className={`max-w-md mx-auto px-4 ${step === 2 ? 'h-screen flex flex-col' : 'py-6 space-y-4'}`}>
         {/* Back Button */}
         <div className="absolute top-4 left-4 z-50">
-          <Link to="/main">
-            <Button variant="ghost" size="icon" className="rounded-full">
+          {step === 2 ? (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="rounded-full"
+              onClick={() => setStep(1)}
+            >
               <ArrowLeft className="w-5 h-5" />
             </Button>
-          </Link>
+          ) : (
+            <Link to="/main">
+              <Button variant="ghost" size="icon" className="rounded-full">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+          )}
         </div>
         {step === 1 ? (
           <>
