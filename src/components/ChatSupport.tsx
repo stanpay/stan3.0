@@ -105,7 +105,7 @@ const ChatSupport = () => {
 
       {/* Chat Popup */}
       {isOpen && (
-        <Card ref={chatRef} className="fixed bottom-24 right-6 w-96 h-[500px] shadow-2xl z-50 flex flex-col animate-scale-in">
+        <Card ref={chatRef} className="fixed bottom-24 right-4 left-4 md:left-auto md:w-96 max-w-md h-[500px] shadow-2xl z-50 flex flex-col animate-scale-in md:right-6">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-border bg-primary text-primary-foreground rounded-t-lg">
             <div className="flex items-center gap-2">
