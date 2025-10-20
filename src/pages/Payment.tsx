@@ -283,7 +283,7 @@ const Payment = () => {
             </div>
 
             {/* Main Content Area - Full Height */}
-            <div className="flex flex-col h-full py-4 overflow-hidden">
+            <div className="flex flex-col h-full py-4 pb-20 overflow-hidden">
               {/* Scrollable Card Container with Snap */}
               <div 
                 className="flex-1 overflow-y-scroll snap-y snap-mandatory scrollbar-hide"
@@ -315,76 +315,74 @@ const Payment = () => {
                   }
                 }}
               >
-                <div className="space-y-4">
-                  {/* Gifticon Cards */}
-                  {purchasedGifticons.map((id, index) => {
-                    const gifticon = gifticons.find(g => g.id === id);
-                    if (!gifticon) return null;
-                    
-                    return (
-                      <div
-                        key={`gifticon-${id}`}
-                        className="snap-start"
-                        style={{
-                          scrollSnapAlign: 'start',
-                          scrollSnapStop: 'always',
-                        }}
-                      >
-                        <Card className="p-4 rounded-2xl border-border/50">
-                          <div className="space-y-3">
-                            <BarcodeDisplay number={`8801234${id.toString().padStart(6, "0")}`} />
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                <Gift className="w-4 h-4 text-primary" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">기프티콘</p>
-                                <p className="font-bold text-sm">{gifticon.name}</p>
-                              </div>
-                            </div>
-                          </div>
-                        </Card>
-                      </div>
-                    );
-                  })}
-
-                  {/* Membership Card */}
-                  <div 
-                    className="snap-start"
-                    style={{
-                      scrollSnapAlign: 'start',
-                      scrollSnapStop: 'always',
-                    }}
-                  >
-                    <Card className="p-4 rounded-2xl border-border/50">
-                      <div className="space-y-3">
-                        <BarcodeDisplay number="1234567890123" />
-                        <div className="space-y-2">
+                {/* Gifticon Cards */}
+                {purchasedGifticons.map((id, index) => {
+                  const gifticon = gifticons.find(g => g.id === id);
+                  if (!gifticon) return null;
+                  
+                  return (
+                    <div
+                      key={`gifticon-${id}`}
+                      className="snap-start mb-4"
+                      style={{
+                        scrollSnapAlign: 'start',
+                        scrollSnapStop: 'always',
+                      }}
+                    >
+                      <Card className="p-4 rounded-2xl border-border/50">
+                        <div className="space-y-3">
+                          <BarcodeDisplay number={`8801234${id.toString().padStart(6, "0")}`} />
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center flex-shrink-0">
-                              <CreditCard className="w-4 h-4 text-secondary" />
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <Gift className="w-4 h-4 text-primary" />
                             </div>
                             <div>
-                              <p className="text-xs text-muted-foreground">멤버십</p>
-                              <p className="font-bold text-sm">{membershipName}</p>
+                              <p className="text-xs text-muted-foreground">기프티콘</p>
+                              <p className="font-bold text-sm">{gifticon.name}</p>
                             </div>
                           </div>
-                          {storeId === "starbucks" && (
-                            <div className="flex items-center gap-2 text-xs pl-[44px]">
-                              <span className="text-muted-foreground">적립 가능 별:</span>
-                              <span>⭐⭐⭐</span>
-                            </div>
-                          )}
-                          {storeId === "baskin" && (
-                            <div className="flex items-center gap-2 text-xs pl-[44px]">
-                              <span className="text-muted-foreground">보유 포인트:</span>
-                              <span className="font-semibold">1,500P</span>
-                            </div>
-                          )}
                         </div>
+                      </Card>
+                    </div>
+                  );
+                })}
+
+                {/* Membership Card */}
+                <div 
+                  className="snap-start"
+                  style={{
+                    scrollSnapAlign: 'start',
+                    scrollSnapStop: 'always',
+                  }}
+                >
+                  <Card className="p-4 rounded-2xl border-border/50">
+                    <div className="space-y-3">
+                      <BarcodeDisplay number="1234567890123" />
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center flex-shrink-0">
+                            <CreditCard className="w-4 h-4 text-secondary" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">멤버십</p>
+                            <p className="font-bold text-sm">{membershipName}</p>
+                          </div>
+                        </div>
+                        {storeId === "starbucks" && (
+                          <div className="flex items-center gap-2 text-xs pl-[44px]">
+                            <span className="text-muted-foreground">적립 가능 별:</span>
+                            <span>⭐⭐⭐</span>
+                          </div>
+                        )}
+                        {storeId === "baskin" && (
+                          <div className="flex items-center gap-2 text-xs pl-[44px]">
+                            <span className="text-muted-foreground">보유 포인트:</span>
+                            <span className="font-semibold">1,500P</span>
+                          </div>
+                        )}
                       </div>
-                    </Card>
-                  </div>
+                    </div>
+                  </Card>
                 </div>
               </div>
             </div>
