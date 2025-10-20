@@ -96,7 +96,7 @@ const ChatSupport = () => {
       {!isOpen && (
         <Button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg z-50"
+          className="fixed bottom-24 right-6 h-14 w-14 rounded-full shadow-lg z-50"
           size="icon"
         >
           <MessageCircle className="h-6 w-6" />
@@ -105,7 +105,7 @@ const ChatSupport = () => {
 
       {/* Chat Popup */}
       {isOpen && (
-        <Card ref={chatRef} className="fixed bottom-6 right-6 w-96 h-[500px] shadow-2xl z-50 flex flex-col animate-scale-in">
+        <Card ref={chatRef} className="fixed bottom-24 right-6 w-96 h-[500px] shadow-2xl z-50 flex flex-col animate-scale-in">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-border bg-primary text-primary-foreground rounded-t-lg">
             <div className="flex items-center gap-2">
