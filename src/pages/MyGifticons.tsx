@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Filter, ArrowUpDown } from "lucide-react";
+import { ChevronLeft, Filter, ArrowUpDown, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
@@ -18,6 +18,7 @@ interface Gifticon {
 
 const MyGifticons = () => {
   const [filterStatus, setFilterStatus] = useState<"전체" | "사용가능" | "사용완료">("전체");
+  const [sellingStatus, setSellingStatus] = useState<Record<number, boolean>>({});
 
   const gifticons: Gifticon[] = [
     {
@@ -80,6 +81,13 @@ const MyGifticons = () => {
     if (filterStatus === "전체") return true;
     return gifticon.status === filterStatus;
   });
+
+  const toggleSelling = (id: number) => {
+    setSellingStatus(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20 overflow-x-hidden">
@@ -172,11 +180,31 @@ const MyGifticons = () => {
                 <p className="text-xs text-muted-foreground">
                   ~{gifticon.expiryDate}
                 </p>
+                {gifticon.status === "사용가능" && (
+                  <Button
+                    variant={sellingStatus[gifticon.id] ? "secondary" : "default"}
+                    size="sm"
+                    className="w-full mt-2"
+                    onClick={() => toggleSelling(gifticon.id)}
+                  >
+                    {sellingStatus[gifticon.id] ? "판매중" : "판매하기"}
+                  </Button>
+                )}
               </div>
             </Card>
           ))}
         </div>
       </div>
+
+      {/* Add Gifticon Floating Button */}
+      <Link to="/sell">
+        <Button
+          size="lg"
+          className="fixed bottom-36 right-6 h-14 w-14 rounded-full shadow-lg z-40 bg-secondary hover:bg-secondary/90"
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      </Link>
 
       <BottomNav />
     </div>
