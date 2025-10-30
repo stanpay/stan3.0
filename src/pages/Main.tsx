@@ -552,7 +552,18 @@ const Main = () => {
         ) : sortedStores.length > 0 ? (
           <div className="grid grid-cols-2 gap-4 animate-fade-in">
             {sortedStores.map((store) => (
-              <StoreCard key={store.id} {...store} />
+              <StoreCard 
+                key={store.id} 
+                {...store} 
+                isLoggedIn={isLoggedIn}
+                onLoginRequired={() => {
+                  toast({
+                    title: "로그인 필요",
+                    description: "결제를 이용하려면 로그인이 필요합니다.",
+                  });
+                  navigate('/');
+                }}
+              />
             ))}
           </div>
         ) : (

@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { MapPin } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 interface StoreCardProps {
   id: string;
@@ -9,6 +9,8 @@ interface StoreCardProps {
   image: string;
   maxDiscount: string;
   address?: string;
+  isLoggedIn?: boolean;
+  onLoginRequired?: () => void;
 }
 
 const brandLogos: Record<string, string> = {
@@ -19,7 +21,8 @@ const brandLogos: Record<string, string> = {
   twosome: "https://www.twosome.co.kr/resources/images/content/bi_img_logo_.svg",
 };
 
-const StoreCard = ({ id, name, distance, image, maxDiscount, address }: StoreCardProps) => {
+const StoreCard = ({ id, name, distance, image, maxDiscount, address, isLoggedIn = true, onLoginRequired }: StoreCardProps) => {
+  const navigate = useNavigate();
   const logoSrc = brandLogos[image] || brandLogos.starbucks;
   
   // 매장명 길이에 따라 폰트 크기 자동 조절
@@ -29,9 +32,17 @@ const StoreCard = ({ id, name, distance, image, maxDiscount, address }: StoreCar
     if (name.length <= 16) return "text-xs";
     return "text-[0.65rem]";
   };
+
+  const handleClick = () => {
+    if (isLoggedIn) {
+      navigate(`/payment/${id}`);
+    } else {
+      onLoginRequired?.();
+    }
+  };
   
   return (
-    <Link to={`/payment/${id}`}>
+    <div onClick={handleClick}>
       <Card className="overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-card border-border/50">
         <div className="flex flex-col">
           <div className="flex-1 bg-primary/10 flex items-center justify-center p-4 relative">
@@ -53,7 +64,7 @@ const StoreCard = ({ id, name, distance, image, maxDiscount, address }: StoreCar
           </div>
         </div>
       </Card>
-    </Link>
+    </div>
   );
 };
 
