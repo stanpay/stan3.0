@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import starbucksLogo from "@/assets/starbucks-logo.png";
 import baskinLogo from "@/assets/baskin-logo.png";
 import megaLogo from "@/assets/mega-logo.png";
+import pascucciLogo from "@/assets/pascucci-logo.png";
+import twosomeLogo from "@/assets/twosome-logo.png";
 
 interface StoreCardProps {
   id: string;
@@ -18,6 +20,8 @@ const brandLogos: Record<string, string> = {
   starbucks: starbucksLogo,
   baskin: baskinLogo,
   mega: megaLogo,
+  pascucci: pascucciLogo,
+  twosome: twosomeLogo,
 };
 
 const StoreCard = ({ id, name, distance, image, maxDiscount, address }: StoreCardProps) => {
