@@ -160,6 +160,7 @@ const Main = () => {
     discountNum: number;
     lat?: number;
     lon?: number;
+    address?: string;
   }
 
   const [stores, setStores] = useState<StoreData[]>([]);
@@ -219,6 +220,16 @@ const Main = () => {
 
       const storesData: StoreData[] = filteredStores.map((element: any) => {
         const storeName = element.tags.name || "매장";
+        const tags = element.tags || {};
+        
+        // 주소 정보 추출
+        let address = "";
+        if (tags["addr:street"] || tags["addr:housenumber"]) {
+          address = `${tags["addr:street"] || ""} ${tags["addr:housenumber"] || ""}`.trim();
+        } else if (tags["addr:full"]) {
+          address = tags["addr:full"];
+        }
+        
         // way인 경우 center 사용, node인 경우 lat/lon 직접 사용
         const lat = element.lat || element.center?.lat;
         const lon = element.lon || element.center?.lon;
@@ -228,21 +239,21 @@ const Main = () => {
         
         // 브랜드 식별 및 할인 정보
         let brand = "unknown";
-        let image = "🏪";
+        let image = "starbucks"; // 기본값
         let discountNum = 1000;
         
         const lowerName = storeName.toLowerCase();
         if (storeName.includes("스타벅스") || lowerName.includes("starbucks")) {
           brand = "starbucks";
-          image = "☕";
+          image = "starbucks";
           discountNum = 2500;
         } else if (storeName.includes("베스킨") || lowerName.includes("baskin")) {
           brand = "baskin";
-          image = "🍦";
+          image = "baskin";
           discountNum = 3000;
         } else if (storeName.includes("메가커피") || lowerName.includes("mega")) {
           brand = "mega";
-          image = "☕";
+          image = "mega";
           discountNum = 1800;
         }
 
@@ -256,6 +267,7 @@ const Main = () => {
           discountNum,
           lat,
           lon,
+          address,
         };
       });
 
