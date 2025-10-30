@@ -108,7 +108,9 @@ const MyPage = () => {
           <div className="flex items-center justify-between py-4 border-y border-border my-4">
             <div>
               <p className="text-sm text-muted-foreground mb-1">포인트 잔액</p>
-              <p className="text-2xl font-bold text-primary">15,000 P</p>
+              <p className="text-2xl font-bold text-primary">
+                {isLoggedIn ? "3,000" : "15,000"} P
+              </p>
             </div>
             <Button className="rounded-xl gap-2">
               <Plus className="w-4 h-4" />
@@ -119,15 +121,21 @@ const MyPage = () => {
           {/* Stats */}
           <div className="grid grid-cols-3 gap-4 pt-4">
             <Link to="/my-gifticons" className="text-center cursor-pointer hover:opacity-80 transition-opacity">
-              <p className="text-2xl font-bold text-primary mb-1">12</p>
+              <p className="text-2xl font-bold text-primary mb-1">
+                {isLoggedIn ? "0" : "12"}
+              </p>
               <p className="text-xs text-muted-foreground">보유 기프티콘</p>
             </Link>
             <Link to="/history" className="text-center border-l border-r border-border cursor-pointer hover:opacity-80 transition-opacity">
-              <p className="text-2xl font-bold text-primary mb-1">45</p>
+              <p className="text-2xl font-bold text-primary mb-1">
+                {isLoggedIn ? "0" : "45"}
+              </p>
               <p className="text-xs text-muted-foreground">결제 횟수</p>
             </Link>
             <Link to="/my-gifticons?filter=사용가능&subFilter=판매중" className="text-center cursor-pointer hover:opacity-80 transition-opacity">
-              <p className="text-2xl font-bold text-primary mb-1">8</p>
+              <p className="text-2xl font-bold text-primary mb-1">
+                {isLoggedIn ? "0" : "8"}
+              </p>
               <p className="text-xs text-muted-foreground">판매 중</p>
             </Link>
           </div>
