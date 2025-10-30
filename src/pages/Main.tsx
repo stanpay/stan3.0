@@ -3,10 +3,19 @@ import { Button } from "@/components/ui/button";
 import StoreCard from "@/components/StoreCard";
 import BottomNav from "@/components/BottomNav";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const Main = () => {
   const [sortBy, setSortBy] = useState<"distance" | "discount">("distance");
+  const [currentLocation, setCurrentLocation] = useState("강남구 역삼동");
+
+  useEffect(() => {
+    // localStorage에서 저장된 위치 정보 가져오기
+    const savedLocation = localStorage.getItem("selectedLocation");
+    if (savedLocation) {
+      setCurrentLocation(savedLocation);
+    }
+  }, []);
 
   const storesData = [
     { id: "baskin", name: "베스킨라빈스", distance: "250m", distanceNum: 250, image: "🍦", maxDiscount: "3,000원", discountNum: 3000 },
@@ -36,7 +45,7 @@ const Main = () => {
               className="w-full justify-start h-12 rounded-xl border-border/50 hover:border-primary/50 transition-colors"
             >
               <MapPin className="w-5 h-5 mr-2 text-primary" />
-              <span className="font-medium">현재 위치: 강남구 역삼동</span>
+              <span className="font-medium">현재 위치: {currentLocation}</span>
             </Button>
           </Link>
         </div>
