@@ -257,7 +257,7 @@ const Main = () => {
           const options = {
             location: new kakao.maps.LatLng(latitude, longitude),
             radius: radius,
-            size: 45,
+            size: 15,
           };
 
           ps.keywordSearch(
