@@ -186,10 +186,18 @@ const Main = () => {
       console.log("매장 검색 시작:", latitude, longitude);
 
       // Kakao SDK가 로드될 때까지 대기
-      if (!(window as any).kakao || !(window as any).kakao.maps) {
-        console.error("Kakao SDK가 로드되지 않았습니다");
-        throw new Error("Kakao SDK 로드 실패");
-      }
+      await new Promise<void>((resolve) => {
+        const checkKakao = () => {
+          if ((window as any).kakao && (window as any).kakao.maps) {
+            console.log("Kakao SDK 로드 완료");
+            resolve();
+          } else {
+            console.log("Kakao SDK 로딩 중...");
+            setTimeout(checkKakao, 100);
+          }
+        };
+        checkKakao();
+      });
 
       const kakao = (window as any).kakao;
       const radius = 10000; // 10km (미터 단위)
