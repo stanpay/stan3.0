@@ -279,6 +279,8 @@ const Main = () => {
         { keyword: "스타벅스", image: "starbucks", discountNum: 2500 },
         { keyword: "베스킨라빈스", image: "baskin", discountNum: 3000 },
         { keyword: "메가커피", image: "mega", discountNum: 1800 },
+        { keyword: "파스쿠찌", image: "pascucci", discountNum: 2300 },
+        { keyword: "투썸플레이스", image: "twosome", discountNum: 2400 },
       ];
       console.log("🔍 [매장 검색] 검색할 브랜드:", brands.map(b => b.keyword));
 
