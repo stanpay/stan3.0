@@ -11,12 +11,20 @@ interface StoreCardProps {
   address?: string;
 }
 
+const getLogoUrl = (brandKey: string) => {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  // 먼저 storage에서 여러 확장자로 시도
+  const extensions = ['png', 'svg', 'webp', 'jpg'];
+  // 기본적으로 storage URL 반환 (첫 번째 확장자 사용)
+  return `${supabaseUrl}/storage/v1/object/public/brand-logos/${brandKey}.${extensions[0]}`;
+};
+
 const brandLogos: Record<string, string> = {
-  starbucks: "https://i.namu.wiki/i/j2uG0oGT3wrVr2SoqmAPs-tTDbpRMy13rbAkuB60OpbSH5X2L0TNa5D456eeYqlDE832etwUebQ6R_q56VoyZPSxDlTl6Fs9nqcSSWKzjpbCVAFDDwS-XMwic7e9xGPkU6BjFGV-bACJVMJJGfdtpA.svg",
-  baskin: "https://i.namu.wiki/i/Hul5w8GKariLeNjwOLD1ynOaxHclsA3ShBupmWUHVp-qEv7jLEqXV9ubh3OARuZ7E6KeyrB8RXT6THbwhhXnVSLxAWNdoi4MQ7GoEVHUMrMD6wrQis7otb4j2qCF_VmHQbHnmiAmSTJkm3J4vSlCpQ.svg",
-  mega: "https://i.namu.wiki/i/How4F3VhKeoQ_71vK2j-B-9frLmAcaTQ0h9Qk34yiwS8SYqVa0sTZ2J8k5j8Fk2MneMUhNCQ-WNGMy_Bgf5hDso5IcLSvo1OEXNR9g50sKuNmgO5dcMW1ZdOnG27guwYRkpSm9O_t6BopT8tSJrMCA.svg",
-  pascucci: "https://i.namu.wiki/i/mElShYb8V7AOkXkBsnZl2_4Laf2Z7j00o6O8cXJDdrF8Td8vUOGGJw4v4EwbF-S5tLG-P_TJg1RZLxv_zjpOlQ.webp",
-  twosome: "https://i.namu.wiki/i/7WMmrZsQyrJt0WADKOLxM0PkYLFw9mDhrpU_Qf0pRlvyUyygbwc_uXHbmyHuqOp8LQ-mCvmjhSqU2_lKWHwPfw.svg",
+  starbucks: getLogoUrl('starbucks'),
+  baskin: getLogoUrl('baskin'),
+  mega: getLogoUrl('mega'),
+  pascucci: getLogoUrl('pascucci'),
+  twosome: getLogoUrl('twosome'),
 };
 
 const StoreCard = ({ id, name, distance, image, maxDiscount, address }: StoreCardProps) => {

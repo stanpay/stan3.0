@@ -14,6 +14,7 @@ import MyGifticons from "./pages/MyGifticons";
 import History from "./pages/History";
 import PaymentMethods from "./pages/PaymentMethods";
 import PointsMembership from "./pages/PointsMembership";
+import UploadLogos from "./pages/UploadLogos";
 import NotFound from "./pages/NotFound";
 import ChatSupport from "./components/ChatSupport";
 
@@ -37,6 +38,7 @@ const App = () => (
           <Route path="/history" element={<History />} />
           <Route path="/points-membership" element={<PointsMembership />} />
           <Route path="/payment-methods" element={<PaymentMethods />} />
+          <Route path="/upload-logos" element={<UploadLogos />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
