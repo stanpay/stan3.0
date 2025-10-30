@@ -185,94 +185,52 @@ const Main = () => {
       setIsLoadingStores(true);
       console.log("매장 검색 시작:", latitude, longitude);
 
-      // Overpass API 쿼리 (10km 반경) - amenity=cafe로 모든 카페를 가져옴
-      const radius = 10000; // 10km in meters
-      const query = `
-        [out:json][timeout:25];
-        (
-          node["amenity"="cafe"](around:${radius},${latitude},${longitude});
-          way["amenity"="cafe"](around:${radius},${latitude},${longitude});
-        );
-        out center;
-      `;
+      const KAKAO_REST_API_KEY = "3a48b485f55529cddd4fdc0605637e82";
+      const radius = 10000; // 10km
 
-      console.log("Overpass 쿼리 전송 중...");
-      const response = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: query,
+      // 검색할 브랜드 목록
+      const brands = [
+        { keyword: "스타벅스", image: "starbucks", discountNum: 2500 },
+        { keyword: "베스킨라빈스", image: "baskin", discountNum: 3000 },
+        { keyword: "메가커피", image: "mega", discountNum: 1800 },
+      ];
+
+      // 모든 브랜드를 병렬로 검색
+      const searchPromises = brands.map(async (brand) => {
+        const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(brand.keyword)}&x=${longitude}&y=${latitude}&radius=${radius}&size=45`;
+        
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`,
+          },
+        });
+
+        const data = await response.json();
+        console.log(`${brand.keyword} 검색 결과:`, data);
+
+        return data.documents.map((place: any) => {
+          const distanceNum = parseInt(place.distance || "0");
+          
+          return {
+            id: place.id,
+            name: place.place_name,
+            distance: distanceNum < 1000 ? `${distanceNum}m` : `${(distanceNum / 1000).toFixed(1)}km`,
+            distanceNum,
+            image: brand.image,
+            maxDiscount: `${brand.discountNum.toLocaleString()}원`,
+            discountNum: brand.discountNum,
+            lat: parseFloat(place.y),
+            lon: parseFloat(place.x),
+            address: place.road_address_name || place.address_name,
+          };
+        });
       });
 
-      const data = await response.json();
-      console.log("Overpass API 응답:", data);
+      const results = await Promise.all(searchPromises);
+      const allStores = results.flat();
 
-      // 결과 필터링 및 변환
-      const filteredStores = data.elements.filter((element: any) => {
-        const storeName = (element.tags?.name || "").toLowerCase();
-        return storeName.includes("스타벅스") || 
-               storeName.includes("starbucks") ||
-               storeName.includes("베스킨") ||
-               storeName.includes("baskin") ||
-               storeName.includes("메가커피") ||
-               storeName.includes("mega coffee");
-      });
-
-      console.log("필터링된 매장 수:", filteredStores.length);
-
-      const storesData: StoreData[] = filteredStores.map((element: any) => {
-        const storeName = element.tags.name || "매장";
-        const tags = element.tags || {};
-        
-        // 주소 정보 추출
-        let address = "";
-        if (tags["addr:street"] || tags["addr:housenumber"]) {
-          address = `${tags["addr:street"] || ""} ${tags["addr:housenumber"] || ""}`.trim();
-        } else if (tags["addr:full"]) {
-          address = tags["addr:full"];
-        }
-        
-        // way인 경우 center 사용, node인 경우 lat/lon 직접 사용
-        const lat = element.lat || element.center?.lat;
-        const lon = element.lon || element.center?.lon;
-        
-        const distance = calculateDistance(latitude, longitude, lat, lon);
-        const distanceNum = Math.round(distance * 1000); // meters
-        
-        // 브랜드 식별 및 할인 정보
-        let brand = "unknown";
-        let image = "starbucks"; // 기본값
-        let discountNum = 1000;
-        
-        const lowerName = storeName.toLowerCase();
-        if (storeName.includes("스타벅스") || lowerName.includes("starbucks")) {
-          brand = "starbucks";
-          image = "starbucks";
-          discountNum = 2500;
-        } else if (storeName.includes("베스킨") || lowerName.includes("baskin")) {
-          brand = "baskin";
-          image = "baskin";
-          discountNum = 3000;
-        } else if (storeName.includes("메가커피") || lowerName.includes("mega")) {
-          brand = "mega";
-          image = "mega";
-          discountNum = 1800;
-        }
-
-        return {
-          id: `${brand}-${element.id}`,
-          name: storeName,
-          distance: distanceNum < 1000 ? `${distanceNum}m` : `${(distance).toFixed(1)}km`,
-          distanceNum,
-          image,
-          maxDiscount: `${discountNum.toLocaleString()}원`,
-          discountNum,
-          lat,
-          lon,
-          address,
-        };
-      });
-
-      console.log("매장 데이터:", storesData);
-      setStores(storesData);
+      console.log("총 매장 수:", allStores.length);
+      setStores(allStores);
       setIsLoadingStores(false);
     } catch (error) {
       console.error("매장 검색 실패:", error);
