@@ -185,8 +185,14 @@ const Main = () => {
       setIsLoadingStores(true);
       console.log("매장 검색 시작:", latitude, longitude);
 
-      const KAKAO_REST_API_KEY = "160fadd95613794dce4dfea774d9913d";
-      const radius = 10000; // 10km
+      // Kakao SDK가 로드될 때까지 대기
+      if (!(window as any).kakao || !(window as any).kakao.maps) {
+        console.error("Kakao SDK가 로드되지 않았습니다");
+        throw new Error("Kakao SDK 로드 실패");
+      }
+
+      const kakao = (window as any).kakao;
+      const radius = 10000; // 10km (미터 단위)
 
       // 검색할 브랜드 목록
       const brands = [
@@ -195,34 +201,58 @@ const Main = () => {
         { keyword: "메가커피", image: "mega", discountNum: 1800 },
       ];
 
+      // Places 서비스 객체 생성
+      const ps = new kakao.maps.services.Places();
+
       // 모든 브랜드를 병렬로 검색
-      const searchPromises = brands.map(async (brand) => {
-        const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(brand.keyword)}&x=${longitude}&y=${latitude}&radius=${radius}&size=45`;
-        
-        const response = await fetch(url, {
-          headers: {
-            Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`,
-          },
-        });
-
-        const data = await response.json();
-        console.log(`${brand.keyword} 검색 결과:`, data);
-
-        return data.documents.map((place: any) => {
-          const distanceNum = parseInt(place.distance || "0");
-          
-          return {
-            id: place.id,
-            name: place.place_name,
-            distance: distanceNum < 1000 ? `${distanceNum}m` : `${(distanceNum / 1000).toFixed(1)}km`,
-            distanceNum,
-            image: brand.image,
-            maxDiscount: `${brand.discountNum.toLocaleString()}원`,
-            discountNum: brand.discountNum,
-            lat: parseFloat(place.y),
-            lon: parseFloat(place.x),
-            address: place.road_address_name || place.address_name,
+      const searchPromises = brands.map((brand) => {
+        return new Promise<any[]>((resolve, reject) => {
+          const options = {
+            location: new kakao.maps.LatLng(latitude, longitude),
+            radius: radius,
+            size: 45,
           };
+
+          ps.keywordSearch(
+            brand.keyword,
+            (data: any[], status: any) => {
+              if (status === kakao.maps.services.Status.OK) {
+                console.log(`${brand.keyword} 검색 결과:`, data);
+                
+                const stores = data.map((place: any) => {
+                  // 거리 계산
+                  const distanceNum = calculateDistance(
+                    latitude,
+                    longitude,
+                    parseFloat(place.y),
+                    parseFloat(place.x)
+                  ) * 1000; // km를 m로 변환
+                  
+                  return {
+                    id: place.id,
+                    name: place.place_name,
+                    distance: distanceNum < 1000 ? `${Math.round(distanceNum)}m` : `${(distanceNum / 1000).toFixed(1)}km`,
+                    distanceNum: Math.round(distanceNum),
+                    image: brand.image,
+                    maxDiscount: `${brand.discountNum.toLocaleString()}원`,
+                    discountNum: brand.discountNum,
+                    lat: parseFloat(place.y),
+                    lon: parseFloat(place.x),
+                    address: place.road_address_name || place.address_name,
+                  };
+                });
+                
+                resolve(stores);
+              } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
+                console.log(`${brand.keyword} 검색 결과 없음`);
+                resolve([]);
+              } else {
+                console.error(`${brand.keyword} 검색 실패:`, status);
+                resolve([]);
+              }
+            },
+            options
+          );
         });
       });
 
