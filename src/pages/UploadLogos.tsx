@@ -71,6 +71,10 @@ const UploadLogos = () => {
     return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/brand-logos/${fileName}`;
   };
 
+  if (!isLoggedIn) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-background p-8">
       <div className="max-w-4xl mx-auto">
