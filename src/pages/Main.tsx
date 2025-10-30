@@ -16,7 +16,7 @@ const Main = () => {
     try {
       // Nominatim API 사용 (무료, API 키 불필요)
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ko`,
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ko&zoom=18`,
         {
           headers: {
             'User-Agent': 'StanPay App'
@@ -25,18 +25,61 @@ const Main = () => {
       );
       
       const data = await response.json();
+      console.log("Nominatim 응답:", data);
       
       if (data && data.address) {
-        const { city, town, village, county, suburb, neighbourhood } = data.address;
+        const address = data.address;
+        console.log("주소 데이터:", address);
         
-        // 시/군/구 찾기
-        const cityName = city || county || town || "알 수 없는 지역";
+        // 한국 주소 형식 파싱
+        let cityName = "";
+        let districtName = "";
         
-        // 동/읍/면 찾기
-        const districtName = suburb || neighbourhood || village || town || "알 수 없는 동";
+        // 시/도 찾기 (city, state, province 중 하나)
+        if (address.city) {
+          cityName = address.city;
+        } else if (address.province || address.state) {
+          cityName = address.province || address.state;
+          // 도 단위인 경우 시/군 추가
+          if (address.county) {
+            cityName = address.county;
+          }
+        }
         
-        const formattedAddress = `${cityName} ${districtName}`;
-        return formattedAddress;
+        // 동/읍/면 찾기 (더 구체적인 순서로)
+        if (address.neighbourhood) {
+          districtName = address.neighbourhood;
+        } else if (address.suburb) {
+          districtName = address.suburb;
+        } else if (address.quarter) {
+          districtName = address.quarter;
+        } else if (address.village) {
+          districtName = address.village;
+        } else if (address.town) {
+          districtName = address.town;
+        } else if (address.municipality) {
+          districtName = address.municipality;
+        }
+        
+        // 결과 조합
+        if (cityName && districtName) {
+          // "시" 또는 "군" 제거하고 깔끔하게
+          cityName = cityName.replace(/(특별시|광역시|특별자치시|특별자치도|도)$/, '');
+          const formattedAddress = `${cityName} ${districtName}`;
+          console.log("최종 주소:", formattedAddress);
+          return formattedAddress;
+        } else if (cityName) {
+          return cityName;
+        }
+      }
+      
+      // 주소를 찾지 못한 경우 display_name 사용
+      if (data.display_name) {
+        const parts = data.display_name.split(',').map(p => p.trim());
+        console.log("display_name 파싱:", parts);
+        if (parts.length >= 2) {
+          return `${parts[0]} ${parts[1]}`;
+        }
       }
       
       return "위치를 확인할 수 없음";
@@ -48,20 +91,16 @@ const Main = () => {
 
   useEffect(() => {
     const initLocation = async () => {
-      // localStorage에서 저장된 위치 정보 확인
-      const savedLocation = localStorage.getItem("selectedLocation");
-      
-      if (savedLocation && savedLocation !== "현재 위치") {
-        setCurrentLocation(savedLocation);
-        setIsLoadingLocation(false);
-        return;
-      }
+      // Main 페이지 진입 시 항상 현재 위치를 새로 가져오기
+      setIsLoadingLocation(true);
 
       // 위치 권한 확인 및 현재 위치 가져오기
       if (navigator.geolocation) {
+        console.log("위치 정보 요청 시작...");
         navigator.geolocation.getCurrentPosition(
           async (position) => {
             const { latitude, longitude } = position.coords;
+            console.log("좌표:", latitude, longitude);
             
             // 좌표를 주소로 변환
             const address = await getAddressFromCoords(latitude, longitude);
@@ -91,8 +130,8 @@ const Main = () => {
           },
           {
             enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 300000 // 5분간 캐시 사용
+            timeout: 15000,
+            maximumAge: 0 // 항상 새로운 위치 가져오기
           }
         );
       } else {
