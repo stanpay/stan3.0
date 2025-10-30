@@ -1,13 +1,14 @@
-import { MapPin, ArrowUpDown, Search, Loader2 } from "lucide-react";
+import { MapPin, ArrowUpDown, Search, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StoreCard from "@/components/StoreCard";
 import BottomNav from "@/components/BottomNav";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 const Main = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [sortBy, setSortBy] = useState<"distance" | "discount">("distance");
   const [currentLocation, setCurrentLocation] = useState("위치 가져오는 중...");
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
@@ -150,6 +151,51 @@ const Main = () => {
     initLocation();
   }, [toast]);
 
+  const handleRefreshLocation = async () => {
+    setIsLoadingLocation(true);
+    setCurrentLocation("위치 확인 중...");
+    
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          const address = await getAddressFromCoords(latitude, longitude);
+          
+          localStorage.setItem("selectedLocation", address);
+          localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+          setCurrentLocation(address);
+          setCurrentCoords({ latitude, longitude });
+          setIsLoadingLocation(false);
+          
+          await fetchNearbyStores(latitude, longitude);
+          
+          toast({
+            title: "위치 업데이트 완료",
+            description: "현재 위치가 업데이트되었습니다.",
+          });
+        },
+        (error) => {
+          console.error("위치 가져오기 실패:", error);
+          const defaultLocation = "강남구 역삼동";
+          setCurrentLocation(defaultLocation);
+          localStorage.setItem("selectedLocation", defaultLocation);
+          setIsLoadingLocation(false);
+          
+          toast({
+            title: "위치 업데이트 실패",
+            description: "위치를 가져올 수 없습니다.",
+            variant: "destructive",
+          });
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        }
+      );
+    }
+  };
+
   interface StoreData {
     id: string;
     name: string;
@@ -287,12 +333,13 @@ const Main = () => {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95">
         <div className="max-w-md mx-auto px-4 py-4">
-          <Link to="/location">
-            <Button 
-              variant="outline" 
-              className="w-full justify-start h-12 rounded-xl border-border/50 hover:border-primary/50 transition-colors"
-              disabled={isLoadingLocation}
-            >
+          <Button 
+            variant="outline" 
+            className="w-full justify-between h-12 rounded-xl border-border/50 hover:border-primary/50 transition-colors"
+            disabled={isLoadingLocation}
+            onClick={() => navigate('/location')}
+          >
+            <div className="flex items-center">
               {isLoadingLocation ? (
                 <Loader2 className="w-5 h-5 mr-2 text-primary animate-spin" />
               ) : (
@@ -301,8 +348,18 @@ const Main = () => {
               <span className="font-medium">
                 {isLoadingLocation ? "위치 확인 중..." : `현재 위치: ${currentLocation}`}
               </span>
-            </Button>
-          </Link>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRefreshLocation();
+              }}
+              disabled={isLoadingLocation}
+              className="p-1.5 hover:bg-accent rounded-md transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoadingLocation ? 'animate-spin' : ''}`} />
+            </button>
+          </Button>
         </div>
       </header>
 
