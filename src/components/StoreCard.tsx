@@ -24,9 +24,10 @@ const StoreCard = ({ id, name, distance, image, maxDiscount, address }: StoreCar
   
   // 매장명 길이에 따라 폰트 크기 자동 조절
   const getFontSizeClass = () => {
-    if (name.length <= 10) return "text-base";
-    if (name.length <= 15) return "text-sm";
-    return "text-xs";
+    if (name.length <= 8) return "text-base";
+    if (name.length <= 12) return "text-sm";
+    if (name.length <= 16) return "text-xs";
+    return "text-[0.65rem]";
   };
   
   return (
@@ -44,7 +45,7 @@ const StoreCard = ({ id, name, distance, image, maxDiscount, address }: StoreCar
             </div>
           </div>
           <div className="p-3 bg-card">
-            <h3 className={`font-bold mb-1 truncate ${getFontSizeClass()}`} title={name}>{name}</h3>
+            <h3 className={`font-bold mb-1 whitespace-nowrap ${getFontSizeClass()}`}>{name}</h3>
             <div className="flex items-center text-xs text-muted-foreground">
               <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
               <span className="break-words">{distance}</span>
