@@ -44,9 +44,9 @@ const StoreCard = ({ id, name, distance, image, maxDiscount, address }: StoreCar
               최대 {maxDiscount}
             </div>
           </div>
-          <div className="p-3 bg-card">
-            <h3 className={`font-bold mb-1 whitespace-nowrap ${getFontSizeClass()}`}>{name}</h3>
-            <div className="flex items-center text-xs text-muted-foreground">
+          <div className="p-3 bg-card overflow-hidden">
+            <h3 className={`font-bold mb-1 whitespace-nowrap text-center ${getFontSizeClass()}`}>{name}</h3>
+            <div className="flex items-center text-xs text-muted-foreground justify-center">
               <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
               <span className="break-words">{distance}</span>
             </div>
