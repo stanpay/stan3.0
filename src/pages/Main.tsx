@@ -1,21 +1,111 @@
-import { MapPin, ArrowUpDown, Search } from "lucide-react";
+import { MapPin, ArrowUpDown, Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StoreCard from "@/components/StoreCard";
 import BottomNav from "@/components/BottomNav";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 const Main = () => {
+  const { toast } = useToast();
   const [sortBy, setSortBy] = useState<"distance" | "discount">("distance");
-  const [currentLocation, setCurrentLocation] = useState("강남구 역삼동");
+  const [currentLocation, setCurrentLocation] = useState("위치 가져오는 중...");
+  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
+
+  const getAddressFromCoords = async (latitude: number, longitude: number) => {
+    try {
+      // Nominatim API 사용 (무료, API 키 불필요)
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ko`,
+        {
+          headers: {
+            'User-Agent': 'StanPay App'
+          }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data && data.address) {
+        const { city, town, village, county, suburb, neighbourhood } = data.address;
+        
+        // 시/군/구 찾기
+        const cityName = city || county || town || "알 수 없는 지역";
+        
+        // 동/읍/면 찾기
+        const districtName = suburb || neighbourhood || village || town || "알 수 없는 동";
+        
+        const formattedAddress = `${cityName} ${districtName}`;
+        return formattedAddress;
+      }
+      
+      return "위치를 확인할 수 없음";
+    } catch (error) {
+      console.error("주소 변환 실패:", error);
+      return "위치를 확인할 수 없음";
+    }
+  };
 
   useEffect(() => {
-    // localStorage에서 저장된 위치 정보 가져오기
-    const savedLocation = localStorage.getItem("selectedLocation");
-    if (savedLocation) {
-      setCurrentLocation(savedLocation);
-    }
-  }, []);
+    const initLocation = async () => {
+      // localStorage에서 저장된 위치 정보 확인
+      const savedLocation = localStorage.getItem("selectedLocation");
+      
+      if (savedLocation && savedLocation !== "현재 위치") {
+        setCurrentLocation(savedLocation);
+        setIsLoadingLocation(false);
+        return;
+      }
+
+      // 위치 권한 확인 및 현재 위치 가져오기
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            
+            // 좌표를 주소로 변환
+            const address = await getAddressFromCoords(latitude, longitude);
+            
+            // 저장 및 표시
+            localStorage.setItem("selectedLocation", address);
+            localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+            setCurrentLocation(address);
+            setIsLoadingLocation(false);
+          },
+          (error) => {
+            console.error("위치 가져오기 실패:", error);
+            
+            // 기본값 설정
+            const defaultLocation = "강남구 역삼동";
+            setCurrentLocation(defaultLocation);
+            localStorage.setItem("selectedLocation", defaultLocation);
+            setIsLoadingLocation(false);
+            
+            // 에러 메시지 표시 (권한 거부시)
+            if (error.code === error.PERMISSION_DENIED) {
+              toast({
+                title: "위치 권한 필요",
+                description: "위치 권한을 허용하면 자동으로 현재 위치가 설정됩니다.",
+              });
+            }
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 300000 // 5분간 캐시 사용
+          }
+        );
+      } else {
+        // Geolocation 미지원
+        const defaultLocation = "강남구 역삼동";
+        setCurrentLocation(defaultLocation);
+        localStorage.setItem("selectedLocation", defaultLocation);
+        setIsLoadingLocation(false);
+      }
+    };
+
+    initLocation();
+  }, [toast]);
 
   const storesData = [
     { id: "baskin", name: "베스킨라빈스", distance: "250m", distanceNum: 250, image: "🍦", maxDiscount: "3,000원", discountNum: 3000 },
@@ -43,9 +133,16 @@ const Main = () => {
             <Button 
               variant="outline" 
               className="w-full justify-start h-12 rounded-xl border-border/50 hover:border-primary/50 transition-colors"
+              disabled={isLoadingLocation}
             >
-              <MapPin className="w-5 h-5 mr-2 text-primary" />
-              <span className="font-medium">현재 위치: {currentLocation}</span>
+              {isLoadingLocation ? (
+                <Loader2 className="w-5 h-5 mr-2 text-primary animate-spin" />
+              ) : (
+                <MapPin className="w-5 h-5 mr-2 text-primary" />
+              )}
+              <span className="font-medium">
+                {isLoadingLocation ? "위치 확인 중..." : `현재 위치: ${currentLocation}`}
+              </span>
             </Button>
           </Link>
         </div>
