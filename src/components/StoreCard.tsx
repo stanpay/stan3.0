@@ -37,15 +37,15 @@ const StoreCard = ({ id, name, distance, image, maxDiscount, address }: StoreCar
             </div>
           </div>
           <div className="p-3 bg-card">
-            <h3 className="font-bold text-base mb-0.5 truncate" title={name}>{name}</h3>
+            <h3 className="font-bold text-base mb-0.5 break-words">{name}</h3>
             {address && (
-              <p className="text-xs text-muted-foreground mb-1 truncate" title={address}>
+              <p className="text-xs text-muted-foreground mb-1 break-words">
                 {address}
               </p>
             )}
             <div className="flex items-center text-xs text-muted-foreground">
-              <MapPin className="w-3 h-3 mr-1" />
-              <span>{distance}</span>
+              <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
+              <span className="break-words">{distance}</span>
             </div>
           </div>
         </div>
