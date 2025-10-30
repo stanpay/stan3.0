@@ -135,17 +135,21 @@ const Payment = () => {
 
   return (
     <div className={`bg-background ${step === 2 ? 'h-screen overflow-hidden' : 'min-h-screen pb-6'}`}>
-      <main className={`max-w-md mx-auto ${step === 2 ? 'h-full flex flex-col pl-14 pr-4 overflow-hidden' : 'px-4 py-6 space-y-4'}`}>
-        {/* Back Button */}
-        {step === 1 && (
-          <div className="absolute top-4 left-4 z-50">
+      {/* Header with Back Button and Store Name */}
+      {step === 1 && (
+        <header className="sticky top-0 z-50 bg-card border-b border-border">
+          <div className="max-w-md mx-auto px-4 py-4 flex items-center gap-3">
             <Link to="/main">
               <Button variant="ghost" size="icon" className="rounded-full">
                 <ArrowLeft className="w-5 h-5" />
               </Button>
             </Link>
+            <h1 className="text-xl font-bold">{storeName}</h1>
           </div>
-        )}
+        </header>
+      )}
+      
+      <main className={`max-w-md mx-auto ${step === 2 ? 'h-full flex flex-col pl-14 pr-4 overflow-hidden' : 'px-4 py-6 space-y-4'}`}>
         {step === 1 ? (
           <>
             {/* Payment Method Selection */}
