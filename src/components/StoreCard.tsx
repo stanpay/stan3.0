@@ -22,6 +22,13 @@ const brandLogos: Record<string, string> = {
 const StoreCard = ({ id, name, distance, image, maxDiscount, address }: StoreCardProps) => {
   const logoSrc = brandLogos[image] || brandLogos.starbucks;
   
+  // 매장명 길이에 따라 폰트 크기 자동 조절
+  const getFontSizeClass = () => {
+    if (name.length <= 10) return "text-base";
+    if (name.length <= 15) return "text-sm";
+    return "text-xs";
+  };
+  
   return (
     <Link to={`/payment/${id}`}>
       <Card className="overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-card border-border/50">
@@ -37,7 +44,7 @@ const StoreCard = ({ id, name, distance, image, maxDiscount, address }: StoreCar
             </div>
           </div>
           <div className="p-3 bg-card">
-            <h3 className="font-bold text-sm mb-1 break-words leading-tight line-clamp-2">{name}</h3>
+            <h3 className={`font-bold mb-1 truncate ${getFontSizeClass()}`} title={name}>{name}</h3>
             <div className="flex items-center text-xs text-muted-foreground">
               <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
               <span className="break-words">{distance}</span>
