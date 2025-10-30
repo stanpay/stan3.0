@@ -184,18 +184,18 @@ const Main = () => {
       setIsLoadingStores(true);
       console.log("매장 검색 시작:", latitude, longitude);
 
-      // Overpass API 쿼리 (10km 반경)
+      // Overpass API 쿼리 (10km 반경) - amenity=cafe로 모든 카페를 가져옴
       const radius = 10000; // 10km in meters
       const query = `
         [out:json][timeout:25];
         (
-          node["name"~"스타벅스|Starbucks",i](around:${radius},${latitude},${longitude});
-          node["name"~"베스킨라빈스|Baskin Robbins",i](around:${radius},${latitude},${longitude});
-          node["name"~"메가커피|MEGA Coffee",i](around:${radius},${latitude},${longitude});
+          node["amenity"="cafe"](around:${radius},${latitude},${longitude});
+          way["amenity"="cafe"](around:${radius},${latitude},${longitude});
         );
-        out body;
+        out center;
       `;
 
+      console.log("Overpass 쿼리 전송 중...");
       const response = await fetch('https://overpass-api.de/api/interpreter', {
         method: 'POST',
         body: query,
@@ -204,9 +204,26 @@ const Main = () => {
       const data = await response.json();
       console.log("Overpass API 응답:", data);
 
-      const storesData: StoreData[] = data.elements.map((element: any) => {
+      // 결과 필터링 및 변환
+      const filteredStores = data.elements.filter((element: any) => {
+        const storeName = (element.tags?.name || "").toLowerCase();
+        return storeName.includes("스타벅스") || 
+               storeName.includes("starbucks") ||
+               storeName.includes("베스킨") ||
+               storeName.includes("baskin") ||
+               storeName.includes("메가커피") ||
+               storeName.includes("mega coffee");
+      });
+
+      console.log("필터링된 매장 수:", filteredStores.length);
+
+      const storesData: StoreData[] = filteredStores.map((element: any) => {
         const storeName = element.tags.name || "매장";
-        const distance = calculateDistance(latitude, longitude, element.lat, element.lon);
+        // way인 경우 center 사용, node인 경우 lat/lon 직접 사용
+        const lat = element.lat || element.center?.lat;
+        const lon = element.lon || element.center?.lon;
+        
+        const distance = calculateDistance(latitude, longitude, lat, lon);
         const distanceNum = Math.round(distance * 1000); // meters
         
         // 브랜드 식별 및 할인 정보
@@ -214,15 +231,16 @@ const Main = () => {
         let image = "🏪";
         let discountNum = 1000;
         
-        if (storeName.includes("스타벅스") || storeName.toLowerCase().includes("starbucks")) {
+        const lowerName = storeName.toLowerCase();
+        if (storeName.includes("스타벅스") || lowerName.includes("starbucks")) {
           brand = "starbucks";
           image = "☕";
           discountNum = 2500;
-        } else if (storeName.includes("베스킨") || storeName.toLowerCase().includes("baskin")) {
+        } else if (storeName.includes("베스킨") || lowerName.includes("baskin")) {
           brand = "baskin";
           image = "🍦";
           discountNum = 3000;
-        } else if (storeName.includes("메가커피") || storeName.toLowerCase().includes("mega")) {
+        } else if (storeName.includes("메가커피") || lowerName.includes("mega")) {
           brand = "mega";
           image = "☕";
           discountNum = 1800;
@@ -236,8 +254,8 @@ const Main = () => {
           image,
           maxDiscount: `${discountNum.toLocaleString()}원`,
           discountNum,
-          lat: element.lat,
-          lon: element.lon,
+          lat,
+          lon,
         };
       });
 
