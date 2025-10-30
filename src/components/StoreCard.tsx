@@ -34,11 +34,8 @@ const StoreCard = ({ id, name, distance, image, maxDiscount, address, isLoggedIn
   };
 
   const handleClick = () => {
-    if (isLoggedIn) {
-      navigate(`/payment/${id}`);
-    } else {
-      onLoginRequired?.();
-    }
+    // 로그인 여부와 관계없이 결제 페이지로 이동 (더미 데이터 표시)
+    navigate(`/payment/${id}`);
   };
   
   return (

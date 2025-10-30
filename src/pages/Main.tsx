@@ -556,13 +556,6 @@ const Main = () => {
                 key={store.id} 
                 {...store} 
                 isLoggedIn={isLoggedIn}
-                onLoginRequired={() => {
-                  toast({
-                    title: "로그인 필요",
-                    description: "결제를 이용하려면 로그인이 필요합니다.",
-                  });
-                  navigate('/');
-                }}
               />
             ))}
           </div>
