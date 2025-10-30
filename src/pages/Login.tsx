@@ -128,6 +128,15 @@ const Login = () => {
               >
                 {isLoading ? "발송 중..." : "인증 이메일 받기"}
               </Button>
+
+              <Button 
+                type="button"
+                variant="outline"
+                className="w-full h-12 text-lg font-semibold rounded-xl"
+                onClick={() => navigate("/main")}
+              >
+                데모 구경하기
+              </Button>
             </form>
           ) : (
             <form onSubmit={handleVerifyOtp} className="space-y-4">
