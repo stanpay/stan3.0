@@ -91,29 +91,21 @@ const Main = () => {
   };
 
   useEffect(() => {
-    const waitForKakao = async () => {
-      console.log("🔍 [Kakao SDK] 로드 대기 시작");
-      
+    const waitForKakao = () => {
       return new Promise<boolean>((resolve) => {
-        // Kakao 객체가 있는지 확인
-        if (!(window as any).kakao) {
-          console.error("❌ [Kakao SDK] Kakao 객체를 찾을 수 없습니다");
-          toast({
-            title: "지도 로딩 실패",
-            description: "페이지를 새로고침해주세요.",
-            variant: "destructive",
-          });
-          resolve(false);
-          return;
-        }
-
-        console.log("✅ [Kakao SDK] Kakao 객체 확인");
+        console.log("🔍 [Kakao SDK] 로드 확인 시작");
         
-        // kakao.maps.load()를 사용하여 Maps SDK 로드
-        (window as any).kakao.maps.load(() => {
-          console.log("✅ [Kakao SDK] Maps 로드 완료", (window as any).kakao.maps);
-          resolve(true);
-        });
+        const checkKakao = () => {
+          if ((window as any).kakao && (window as any).kakao.maps) {
+            console.log("✅ [Kakao SDK] 로드 완료");
+            resolve(true);
+          } else {
+            console.log("⏳ [Kakao SDK] 대기 중...");
+            setTimeout(checkKakao, 100);
+          }
+        };
+        
+        checkKakao();
       });
     };
 
