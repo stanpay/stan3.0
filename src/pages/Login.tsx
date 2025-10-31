@@ -36,7 +36,8 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithOtp({
+      // 매직링크 이메일 발송 (기존)
+      const { error: authError } = await supabase.auth.signInWithOtp({
         email,
         options: {
           shouldCreateUser: true,
@@ -44,7 +45,28 @@ const Login = () => {
         },
       });
 
-      if (error) throw error;
+      if (authError) throw authError;
+
+      // 인증번호 생성 및 저장 (Edge Function 호출)
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      const functionUrl = `${SUPABASE_URL}/functions/v1/send-verification-code`;
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      const response = await fetch(functionUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${accessToken || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "인증번호 발송 실패");
+      }
 
       setOtpSent(true);
       toast({
@@ -67,14 +89,56 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.verifyOtp({
-        email,
-        token: otp,
-        type: 'email',
+      // 인증번호 검증 (Edge Function 호출)
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      const functionUrl = `${SUPABASE_URL}/functions/v1/verify-code`;
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      const response = await fetch(functionUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${accessToken || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ email, code: otp }),
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "인증번호가 올바르지 않습니다.");
+      }
 
+      const result = await response.json();
+      
+      if (!result.valid) {
+        throw new Error(result.error || "인증번호가 올바르지 않거나 만료되었습니다.");
+      }
+
+      // 인증번호 검증 성공 - Edge Function에서 반환한 토큰으로 로그인
+      if (result.token) {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          email,
+          token: result.token,
+          type: 'email',
+        });
+
+        if (verifyError) {
+          // 토큰 방식이 실패하면 매직링크 방식으로 재시도
+          // (사용자가 이미 매직링크를 받았으므로)
+          throw new Error("로그인 처리 중 오류가 발생했습니다. 이메일의 링크를 클릭해주세요.");
+        }
+      } else {
+        // 토큰이 없으면 매직링크로 로그인하도록 안내
+        toast({
+          title: "인증번호 확인 완료",
+          description: "이메일의 링크를 클릭하여 로그인하세요.",
+        });
+        return;
+      }
+
+      // 로그인 성공
       toast({
         title: "로그인 성공",
         description: "환영합니다!",
