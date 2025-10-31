@@ -244,6 +244,27 @@ export type Database = {
         }
         Relationships: []
       }
+      verification_codes: {
+        Row: {
+          email: string
+          code: string
+          expires_at: string
+          created_at?: string | null
+        }
+        Insert: {
+          email: string
+          code: string
+          expires_at: string
+          created_at?: string | null
+        }
+        Update: {
+          email?: string
+          code?: string
+          expires_at?: string
+          created_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

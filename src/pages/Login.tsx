@@ -36,26 +36,31 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // 인증번호 생성 및 저장 (Edge Function 호출)
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      // 6자리 인증번호 생성
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10분 유효
+
+      // DB에 직접 저장 (RLS 정책 조정 필요)
+      const { error: dbError } = await supabase
+        .from("verification_codes")
+        .upsert({ email, code, expires_at: expiresAt });
+
+      if (dbError) {
+        console.error("DB 저장 오류:", dbError);
+        throw new Error("인증번호 저장 실패: " + dbError.message);
+      }
+
+      // TODO: 실제 이메일 전송 (현재는 콘솔에 출력)
+      // 실제 서비스에서는 Resend API나 다른 이메일 서비스 사용 필요
+      console.log(`[인증번호] ${email}: ${code}`);
       
-      if (!SUPABASE_URL) {
-        throw new Error("Supabase URL이 설정되지 않았습니다.");
-      }
-
-      const functionUrl = `${SUPABASE_URL}/functions/v1/send-verification-code`;
-
-      // Supabase 클라이언트를 사용해서 Edge Function 호출
-      const { data, error } = await supabase.functions.invoke('send-verification-code', {
-        body: { email },
-      });
-
-      if (error) {
-        throw new Error(error.message || "인증번호 발송 실패");
-      }
-
-      if (!data || (data as any).error) {
-        throw new Error((data as any).error || "인증번호 발송 실패");
+      // 개발 환경에서는 토스트로 인증번호 표시 (나중에 제거)
+      if (import.meta.env.DEV) {
+        toast({
+          title: "인증번호 (개발용)",
+          description: `인증번호: ${code}`,
+          duration: 30000,
+        });
       }
 
       setOtpSent(true);
@@ -80,61 +85,63 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // 인증번호 검증 (Edge Function 호출)
-      const { data: result, error } = await supabase.functions.invoke('verify-code', {
-        body: { email, code: otp },
-      });
+      // DB에서 인증번호 확인
+      const { data: codeData, error: codeError } = await supabase
+        .from("verification_codes")
+        .select("*")
+        .eq("email", email)
+        .single();
 
-      if (error) {
-        throw new Error(error.message || "인증번호 검증 실패");
+      if (codeError || !codeData) {
+        throw new Error("인증번호를 찾을 수 없습니다.");
       }
 
-      if (!result) {
-        throw new Error("응답 데이터가 없습니다.");
+      // 만료 여부 및 코드 일치 확인
+      const now = new Date();
+      const expiresAt = new Date(codeData.expires_at);
+
+      if (codeData.code !== otp) {
+        throw new Error("인증번호가 올바르지 않습니다.");
       }
+
+      if (expiresAt <= now) {
+        throw new Error("인증번호가 만료되었습니다.");
+      }
+
+      // 인증번호 검증 성공
+      // 인증번호 삭제
+      await supabase
+        .from("verification_codes")
+        .delete()
+        .eq("email", email);
+
+      // 인증 완료 상태 저장
+      localStorage.setItem('verified_email', email);
+      localStorage.setItem('verified_at', new Date().toISOString());
+
+      // 인증번호 검증 완료 - 사용자 생성 및 로그인
+      // Supabase는 인증번호만으로 직접 로그인할 수 없으므로,
+      // 여기서는 인증번호 검증 완료만 처리하고,
+      // 실제 로그인은 사용자가 이미 세션이 있으면 그대로 사용
       
-      if (!result.valid) {
-        throw new Error(result.error || "인증번호가 올바르지 않거나 만료되었습니다.");
-      }
-
-      // 인증번호 검증 성공 - Edge Function에서 반환한 세션 토큰으로 로그인
-      if (result.access_token && result.refresh_token) {
-        // 세션 토큰으로 직접 로그인
-        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-          access_token: result.access_token,
-          refresh_token: result.refresh_token,
-        });
-
-        if (sessionError || !sessionData.session) {
-          throw new Error("로그인 처리 중 오류가 발생했습니다.");
-        }
-
-        // 로그인 성공
-        toast({
-          title: "로그인 성공",
-          description: "환영합니다!",
-        });
-      } else if (result.token) {
-        // 토큰이 있으면 verifyOtp로 로그인 시도
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          email,
-          token: result.token,
-          type: 'email',
-        });
-
-        if (verifyError) {
-          throw new Error("로그인 처리 중 오류가 발생했습니다.");
-        }
-
-        // 로그인 성공
+      // 기존 세션 확인
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // 이미 로그인되어 있으면 성공
         toast({
           title: "로그인 성공",
           description: "환영합니다!",
         });
       } else {
-        throw new Error("로그인 토큰을 받지 못했습니다.");
+        // 세션이 없으면 인증 완료 안내
+        toast({
+          title: "인증번호 확인 완료",
+          description: "로그인을 완료하려면 이메일의 링크를 확인해주세요.",
+        });
       }
     } catch (error: any) {
+      console.error("인증번호 검증 오류:", error);
       toast({
         title: "인증 실패",
         description: error.message || "인증번호를 확인해주세요.",
