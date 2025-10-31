@@ -183,7 +183,7 @@ const Main = () => {
       const typeFromQuery = urlParams.get('type');
       
       if (tokenHash) {
-        console.log("🔗 [매직링크 처리] token_hash 발견");
+        console.log("🔗 [매직링크 처리] token_hash 발견:", tokenHash.substring(0, 20) + "...");
         try {
           const {
             data: { session, user },
@@ -194,29 +194,34 @@ const Main = () => {
           });
 
           if (error) {
-            console.error("매직링크 인증 오류:", error);
+            console.error("❌ [매직링크 인증 오류]:", error);
             toast({
               title: "인증 실패",
               description: error.message || "인증 링크가 유효하지 않습니다.",
               variant: "destructive",
             });
-            // URL 정리
-            window.history.replaceState({}, document.title, window.location.pathname);
+            // URL 정리 후 로그인 페이지로 이동
+            window.history.replaceState({}, document.title, "/");
             navigate("/");
             return;
-          } else if (session && user) {
+          } 
+          
+          if (session && user) {
+            console.log("✅ [매직링크 인증 성공]");
             toast({
               title: "로그인 성공",
               description: "환영합니다!",
             });
-            // URL 정리
-            window.history.replaceState({}, document.title, window.location.pathname);
+            // URL 정리 (query string 제거)
+            window.history.replaceState({}, document.title, "/main");
             // 인증 완료 후 계속 진행
+            setIsLoggedIn(true);
           } else {
+            console.error("❌ [매직링크] 세션 생성 실패");
             throw new Error("세션을 생성할 수 없습니다.");
           }
         } catch (error: any) {
-          console.error("매직링크 처리 오류:", error);
+          console.error("❌ [매직링크 처리 오류]:", error);
           toast({
             title: "인증 실패",
             description: error.message || "인증 링크 처리 중 오류가 발생했습니다.",
@@ -246,30 +251,19 @@ const Main = () => {
       }
 
       // 로그인한 경우 실제 위치 가져오기
-      const waitForKakao = () => {
-        return new Promise<boolean>((resolve) => {
-          console.log("🔍 [Kakao SDK] 로드 확인 시작");
-          
-          const checkKakao = () => {
-            if ((window as any).kakao && (window as any).kakao.maps) {
-              console.log("✅ [Kakao SDK] 로드 완료");
-              resolve(true);
-            } else {
-              console.log("⏳ [Kakao SDK] 대기 중...");
-              setTimeout(checkKakao, 100);
-            }
-          };
-          
-          checkKakao();
-        });
-      };
-
       console.log("📍 [위치 초기화] 시작");
-      // Kakao SDK 로드 대기
-      const kakaoReady = await waitForKakao();
-      if (!kakaoReady) {
-        console.error("❌ [위치 초기화] Kakao SDK 준비 실패");
+      
+      // Kakao SDK 로드 보장
+      try {
+        const { loadKakaoMaps } = await import("@/lib/kakao");
+        await loadKakaoMaps();
+        console.log("✅ [Kakao SDK] 로드 완료");
+      } catch (error) {
+        console.error("❌ [위치 초기화] Kakao SDK 로드 실패:", error);
         setIsLoadingLocation(false);
+        const defaultLocation = "강남구 역삼동";
+        setCurrentLocation(defaultLocation);
+        localStorage.setItem("selectedLocation", defaultLocation);
         return;
       }
 
@@ -336,7 +330,7 @@ const Main = () => {
     };
 
     checkAuthAndInitLocation();
-  }, [toast]);
+  }, [toast, navigate]);
 
   const handleRefreshLocation = async () => {
     if (!isLoggedIn) {
