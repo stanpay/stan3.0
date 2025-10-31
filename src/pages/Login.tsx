@@ -36,29 +36,15 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // 매직링크 이메일 발송 (기존)
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: true,
-          emailRedirectTo: `${window.location.origin}/main`,
-        },
-      });
-
-      if (authError) throw authError;
-
-      // 인증번호 생성 및 저장 (Edge Function 호출)
+      // 인증번호 생성 및 저장 (Edge Function 호출만)
       const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
       const functionUrl = `${SUPABASE_URL}/functions/v1/send-verification-code`;
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
 
       const response = await fetch(functionUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${accessToken || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({ email }),
       });
@@ -70,13 +56,13 @@ const Login = () => {
 
       setOtpSent(true);
       toast({
-        title: "인증 이메일 발송",
-        description: "이메일을 확인하세요. 인증번호를 입력하거나 링크를 클릭하여 로그인할 수 있습니다.",
+        title: "인증번호 이메일 발송",
+        description: "이메일을 확인하세요. 인증번호를 입력하여 로그인하세요.",
       });
     } catch (error: any) {
       toast({
         title: "발송 실패",
-        description: error.message || "인증 정보 발송 중 오류가 발생했습니다.",
+        description: error.message || "인증번호 발송 중 오류가 발생했습니다.",
         variant: "destructive",
       });
     } finally {
@@ -116,8 +102,25 @@ const Login = () => {
         throw new Error(result.error || "인증번호가 올바르지 않거나 만료되었습니다.");
       }
 
-      // 인증번호 검증 성공 - Edge Function에서 반환한 토큰으로 로그인
-      if (result.token) {
+      // 인증번호 검증 성공 - Edge Function에서 반환한 세션 토큰으로 로그인
+      if (result.access_token && result.refresh_token) {
+        // 세션 토큰으로 직접 로그인
+        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+          access_token: result.access_token,
+          refresh_token: result.refresh_token,
+        });
+
+        if (sessionError || !sessionData.session) {
+          throw new Error("로그인 처리 중 오류가 발생했습니다.");
+        }
+
+        // 로그인 성공
+        toast({
+          title: "로그인 성공",
+          description: "환영합니다!",
+        });
+      } else if (result.token) {
+        // 토큰이 있으면 verifyOtp로 로그인 시도
         const { error: verifyError } = await supabase.auth.verifyOtp({
           email,
           token: result.token,
@@ -125,24 +128,17 @@ const Login = () => {
         });
 
         if (verifyError) {
-          // 토큰 방식이 실패하면 매직링크 방식으로 재시도
-          // (사용자가 이미 매직링크를 받았으므로)
-          throw new Error("로그인 처리 중 오류가 발생했습니다. 이메일의 링크를 클릭해주세요.");
+          throw new Error("로그인 처리 중 오류가 발생했습니다.");
         }
-      } else {
-        // 토큰이 없으면 매직링크로 로그인하도록 안내
-        toast({
-          title: "인증번호 확인 완료",
-          description: "이메일의 링크를 클릭하여 로그인하세요.",
-        });
-        return;
-      }
 
-      // 로그인 성공
-      toast({
-        title: "로그인 성공",
-        description: "환영합니다!",
-      });
+        // 로그인 성공
+        toast({
+          title: "로그인 성공",
+          description: "환영합니다!",
+        });
+      } else {
+        throw new Error("로그인 토큰을 받지 못했습니다.");
+      }
     } catch (error: any) {
       toast({
         title: "인증 실패",
@@ -254,8 +250,8 @@ const Login = () => {
           <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">
               {otpSent 
-                ? "이메일의 인증번호를 입력하거나 링크를 클릭하세요" 
-                : "이메일로 인증번호와 로그인 링크를 받아 간편하게 로그인하세요"
+                ? "이메일의 인증번호를 입력하여 로그인하세요" 
+                : "이메일로 인증번호를 받아 간편하게 로그인하세요"
               }
             </p>
           </div>

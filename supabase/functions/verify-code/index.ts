@@ -33,6 +33,7 @@ serve(async (req) => {
     // 검증 성공 - Supabase Admin API로 사용자 확인/생성
     const { data: authData, error: authError } = await supabase.auth.admin.getUserByEmail(email);
     
+    let userId;
     if (authError || !authData?.user) {
       // 사용자가 없으면 생성
       const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
@@ -46,27 +47,36 @@ serve(async (req) => {
           headers: { "Content-Type": "application/json" } 
         });
       }
+      
+      userId = newUser.user.id;
+    } else {
+      userId = authData.user.id;
     }
     
-    // 인증번호 검증 성공 - 매직링크 토큰 생성해서 반환
+    // 인증번호 검증 성공 - 임시 OTP 토큰 생성 후 세션으로 변환
+    // Supabase의 generateLink를 사용해서 OTP 토큰 생성
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email,
     });
     
     if (linkError || !linkData) {
-      return new Response(JSON.stringify({ valid: false, error: "로그인 링크 생성 실패" }), { 
+      return new Response(JSON.stringify({ valid: false, error: "로그인 토큰 생성 실패" }), { 
         status: 500, 
         headers: { "Content-Type": "application/json" } 
       });
     }
     
-    // 매직링크에서 토큰 추출
-    const token = linkData.properties?.hashed_token || null;
+    // 매직링크 URL에서 토큰 추출
+    const linkUrl = linkData.properties?.action_link || linkData.properties?.hashed_token || "";
+    const tokenMatch = linkUrl.match(/token=([^&]+)/);
+    const token = tokenMatch ? decodeURIComponent(tokenMatch[1]) : (linkData.properties?.hashed_token || null);
     
+    // 클라이언트에서 verifyOtp로 사용할 수 있도록 토큰 반환
     return new Response(JSON.stringify({ 
       valid: true,
-      token: token
+      token: token,
+      user_id: userId
     }), { headers: { "Content-Type": "application/json" } });
   } else {
     return new Response(JSON.stringify({ valid: false, error: "인증번호가 올바르지 않거나 만료되었습니다." }), { 
