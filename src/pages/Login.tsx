@@ -144,9 +144,22 @@ const Login = () => {
 
     try {
       // 배포 환경 URL 확인
-      // 환경 변수에 VITE_SITE_URL이 설정되어 있으면 사용, 없으면 현재 origin 사용
-      const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+      // 우선순위: 1) VITE_SITE_URL 환경 변수, 2) window.location.origin, 3) fallback
+      let siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+      
+      // localhost가 아닌 경우 (배포 환경) 확실하게 처리
+      if (!siteUrl.includes('localhost') && !siteUrl.includes('127.0.0.1')) {
+        // 배포 환경에서 https로 강제 (Vercel은 자동으로 https)
+        if (!siteUrl.startsWith('http')) {
+          siteUrl = `https://${siteUrl}`;
+        } else if (siteUrl.startsWith('http://') && !siteUrl.includes('localhost')) {
+          siteUrl = siteUrl.replace('http://', 'https://');
+        }
+      }
+      
       const redirectUrl = `${siteUrl}/main`;
+      
+      console.log('🔗 Redirect URL:', redirectUrl);
 
       // Supabase의 기본 이메일 인증 방식 사용
       // 매직링크와 OTP가 모두 포함된 이메일을 발송합니다
