@@ -410,6 +410,9 @@ const Main = () => {
       setIsLoadingStores(true);
       console.log("🏪 [매장 검색] 시작:", { latitude, longitude });
 
+      // Kakao SDK 로드 보장
+      const { loadKakaoMaps } = await import("@/lib/kakao");
+      await loadKakaoMaps();
       const kakao = (window as any).kakao;
       if (!kakao?.maps) {
         console.error("❌ [매장 검색] Kakao SDK를 찾을 수 없습니다");
@@ -430,7 +433,7 @@ const Main = () => {
       ];
       console.log("🔍 [매장 검색] 검색할 브랜드:", brands.map(b => b.keyword));
 
-      // Places 서비스 객체 생성
+      // Places 서비스 객체 생성 (SDK 로드 이후 안전)
       console.log("🗺️ [매장 검색] Places 서비스 객체 생성");
       const ps = new kakao.maps.services.Places();
       console.log("✅ [매장 검색] Places 서비스 준비 완료");
