@@ -36,7 +36,7 @@
               <!-- Magic Link Button -->
               <div style="margin: 32px 0; text-align: center;">
                 <p style="margin: 0 0 16px; color: #666; font-size: 14px;">또는 아래 버튼을 클릭하여 로그인하세요</p>
-                <a href="{{ .RedirectTo }}" style="display: inline-block; background-color: #000000; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; border: none; cursor: pointer; transition: background-color 0.2s;">
+                <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email" style="display: inline-block; background-color: #000000; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; border: none; cursor: pointer; transition: background-color 0.2s;">
                   로그인하기
                 </a>
               </div>

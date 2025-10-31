@@ -34,19 +34,52 @@ const Login = () => {
       const urlParams = new URLSearchParams(window.location.search);
       const tokenHash = urlParams.get('token_hash');
       const typeFromQuery = urlParams.get('type');
+      const redirectTo = urlParams.get('redirect_to');
 
-      // Hash fragment에 access_token이 있으면 이미 인증된 상태
+      // Hash fragment에 access_token이 있으면 이미 인증된 상태 (implicit flow)
       if (accessToken) {
-        // 세션이 자동으로 생성되므로 확인만 하면 됨
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
+        setIsLoading(true);
+        try {
+          // 세션이 자동으로 생성되므로 확인만 하면 됨
+          const { data: { session }, error } = await supabase.auth.getSession();
+          
+          if (error) {
+            console.error("세션 확인 오류:", error);
+            toast({
+              title: "인증 실패",
+              description: error.message || "세션을 확인할 수 없습니다.",
+              variant: "destructive",
+            });
+          } else if (session) {
+            toast({
+              title: "로그인 성공",
+              description: "환영합니다!",
+            });
+            // URL 정리
+            window.history.replaceState({}, document.title, window.location.pathname);
+            navigate("/main");
+          } else {
+            // 세션이 아직 생성되지 않았을 수 있으므로 잠시 대기
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const { data: { session: retrySession } } = await supabase.auth.getSession();
+            if (retrySession) {
+              toast({
+                title: "로그인 성공",
+                description: "환영합니다!",
+              });
+              window.history.replaceState({}, document.title, window.location.pathname);
+              navigate("/main");
+            }
+          }
+        } catch (error: any) {
+          console.error("매직링크 처리 오류:", error);
           toast({
-            title: "로그인 성공",
-            description: "환영합니다!",
+            title: "인증 실패",
+            description: error.message || "인증 링크 처리 중 오류가 발생했습니다.",
+            variant: "destructive",
           });
-          // URL 정리
-          window.history.replaceState({}, document.title, window.location.pathname);
-          navigate("/main");
+        } finally {
+          setIsLoading(false);
         }
       }
       // PKCE flow에서 token_hash가 있으면 verifyOtp 호출
@@ -73,9 +106,13 @@ const Login = () => {
               title: "로그인 성공",
               description: "환영합니다!",
             });
+            // redirect_to가 있으면 해당 URL로, 없으면 /main으로
+            const finalUrl = redirectTo ? new URL(redirectTo).pathname : "/main";
             // URL 정리
-            window.history.replaceState({}, document.title, window.location.pathname);
-            navigate("/main");
+            window.history.replaceState({}, document.title, finalUrl);
+            navigate(finalUrl);
+          } else {
+            throw new Error("세션을 생성할 수 없습니다.");
           }
         } catch (error: any) {
           console.error("매직링크 처리 오류:", error);

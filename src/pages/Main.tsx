@@ -177,6 +177,58 @@ const Main = () => {
     const checkAuthAndInitLocation = async () => {
       console.log("🔐 [인증 확인] 시작");
       
+      // 매직링크로 리다이렉트된 경우 처리 (PKCE flow)
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenHash = urlParams.get('token_hash');
+      const typeFromQuery = urlParams.get('type');
+      
+      if (tokenHash) {
+        console.log("🔗 [매직링크 처리] token_hash 발견");
+        try {
+          const {
+            data: { session, user },
+            error,
+          } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: (typeFromQuery || 'email') as 'email' | 'magiclink',
+          });
+
+          if (error) {
+            console.error("매직링크 인증 오류:", error);
+            toast({
+              title: "인증 실패",
+              description: error.message || "인증 링크가 유효하지 않습니다.",
+              variant: "destructive",
+            });
+            // URL 정리
+            window.history.replaceState({}, document.title, window.location.pathname);
+            navigate("/");
+            return;
+          } else if (session && user) {
+            toast({
+              title: "로그인 성공",
+              description: "환영합니다!",
+            });
+            // URL 정리
+            window.history.replaceState({}, document.title, window.location.pathname);
+            // 인증 완료 후 계속 진행
+          } else {
+            throw new Error("세션을 생성할 수 없습니다.");
+          }
+        } catch (error: any) {
+          console.error("매직링크 처리 오류:", error);
+          toast({
+            title: "인증 실패",
+            description: error.message || "인증 링크 처리 중 오류가 발생했습니다.",
+            variant: "destructive",
+          });
+          // URL 정리
+          window.history.replaceState({}, document.title, window.location.pathname);
+          navigate("/");
+          return;
+        }
+      }
+      
       // 로그인 상태 확인
       const { data: { session } } = await supabase.auth.getSession();
       const loggedIn = !!session;
