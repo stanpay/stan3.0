@@ -22,112 +22,18 @@ const Login = () => {
       }
     });
 
-    // 매직링크로 리다이렉트된 경우 처리
-    const handleMagicLink = async () => {
-      // Hash fragment에서 토큰 추출 (implicit flow)
-      const hash = window.location.hash.substring(1);
-      const hashParams = new URLSearchParams(hash);
-      const accessToken = hashParams.get('access_token');
-      const type = hashParams.get('type');
-      
-      // URL query string에서 토큰 추출 (PKCE flow)
-      const urlParams = new URLSearchParams(window.location.search);
-      const tokenHash = urlParams.get('token_hash');
-      const typeFromQuery = urlParams.get('type');
-      const redirectTo = urlParams.get('redirect_to');
-
-      // Hash fragment에 access_token이 있으면 이미 인증된 상태 (implicit flow)
-      if (accessToken) {
-        setIsLoading(true);
-        try {
-          // 세션이 자동으로 생성되므로 확인만 하면 됨
-          const { data: { session }, error } = await supabase.auth.getSession();
-          
-          if (error) {
-            console.error("세션 확인 오류:", error);
-            toast({
-              title: "인증 실패",
-              description: error.message || "세션을 확인할 수 없습니다.",
-              variant: "destructive",
-            });
-          } else if (session) {
-            toast({
-              title: "로그인 성공",
-              description: "환영합니다!",
-            });
-            // URL 정리
-            window.history.replaceState({}, document.title, window.location.pathname);
-            navigate("/main");
-          } else {
-            // 세션이 아직 생성되지 않았을 수 있으므로 잠시 대기
-            await new Promise(resolve => setTimeout(resolve, 500));
-            const { data: { session: retrySession } } = await supabase.auth.getSession();
-            if (retrySession) {
-              toast({
-                title: "로그인 성공",
-                description: "환영합니다!",
-              });
-              window.history.replaceState({}, document.title, window.location.pathname);
-              navigate("/main");
-            }
-          }
-        } catch (error: any) {
-          console.error("매직링크 처리 오류:", error);
-          toast({
-            title: "인증 실패",
-            description: error.message || "인증 링크 처리 중 오류가 발생했습니다.",
-            variant: "destructive",
-          });
-        } finally {
-          setIsLoading(false);
-        }
-      }
-      // PKCE flow에서 token_hash가 있으면 verifyOtp 호출
-      else if (tokenHash) {
-        setIsLoading(true);
-        try {
-          const {
-            data: { session, user },
-            error,
-          } = await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
-            type: (typeFromQuery || 'email') as 'email' | 'magiclink',
-          });
-
-          if (error) {
-            console.error("매직링크 인증 오류:", error);
-            toast({
-              title: "인증 실패",
-              description: error.message || "인증 링크가 유효하지 않습니다.",
-              variant: "destructive",
-            });
-          } else if (session && user) {
-            toast({
-              title: "로그인 성공",
-              description: "환영합니다!",
-            });
-            // redirect_to가 있으면 해당 URL로, 없으면 /main으로
-            const finalUrl = redirectTo ? new URL(redirectTo).pathname : "/main";
-            // URL 정리
-            window.history.replaceState({}, document.title, finalUrl);
-            navigate(finalUrl);
-          } else {
-            throw new Error("세션을 생성할 수 없습니다.");
-          }
-        } catch (error: any) {
-          console.error("매직링크 처리 오류:", error);
-          toast({
-            title: "인증 실패",
-            description: error.message || "인증 링크 처리 중 오류가 발생했습니다.",
-            variant: "destructive",
-          });
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    handleMagicLink();
+    // Note: 매직링크는 /main으로 리다이렉트되므로 Login 페이지를 거치지 않습니다.
+    // 매직링크 처리는 Main.tsx에서 수행됩니다.
+    // 하지만 혹시 / 경로에서 매직링크가 들어올 경우를 대비해 처리 로직 유지
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenHash = urlParams.get('token_hash');
+    
+    if (tokenHash) {
+      console.log("🔗 [Login] 매직링크 감지 - Main으로 리다이렉트 필요");
+      // Main 페이지로 리다이렉트하여 매직링크 처리
+      navigate(`/main?token_hash=${tokenHash}&type=${urlParams.get('type') || 'email'}`);
+      return;
+    }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {

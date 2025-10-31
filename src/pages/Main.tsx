@@ -178,6 +178,7 @@ const Main = () => {
       console.log("🔐 [인증 확인] 시작");
       
       // 매직링크로 리다이렉트된 경우 처리 (PKCE flow)
+      // 매직링크가 /main?token_hash=...로 리다이렉트되는 경우를 처리
       const urlParams = new URLSearchParams(window.location.search);
       const tokenHash = urlParams.get('token_hash');
       const typeFromQuery = urlParams.get('type');
@@ -201,7 +202,7 @@ const Main = () => {
               variant: "destructive",
             });
             // URL 정리 후 로그인 페이지로 이동
-            window.history.replaceState({}, document.title, "/");
+            window.history.replaceState({}, document.title, "/main");
             navigate("/");
             return;
           } 
@@ -214,8 +215,9 @@ const Main = () => {
             });
             // URL 정리 (query string 제거)
             window.history.replaceState({}, document.title, "/main");
-            // 인증 완료 후 계속 진행
+            // 인증 완료 후 계속 진행 (return 없이 계속 실행)
             setIsLoggedIn(true);
+            // 여기서 return 하지 않고 계속 진행하여 위치 초기화 수행
           } else {
             console.error("❌ [매직링크] 세션 생성 실패");
             throw new Error("세션을 생성할 수 없습니다.");
@@ -228,13 +230,13 @@ const Main = () => {
             variant: "destructive",
           });
           // URL 정리
-          window.history.replaceState({}, document.title, window.location.pathname);
+          window.history.replaceState({}, document.title, "/main");
           navigate("/");
           return;
         }
       }
       
-      // 로그인 상태 확인
+      // 로그인 상태 확인 (매직링크 처리 후에도 실행됨)
       const { data: { session } } = await supabase.auth.getSession();
       const loggedIn = !!session;
       setIsLoggedIn(loggedIn);
