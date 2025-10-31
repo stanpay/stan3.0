@@ -16,7 +16,6 @@ import PaymentMethods from "./pages/PaymentMethods";
 import PointsMembership from "./pages/PointsMembership";
 import NotFound from "./pages/NotFound";
 import ChatSupport from "./components/ChatSupport";
-import RegisterGifticon from "./pages/Admin/RegisterGifticon";
 
 const queryClient = new QueryClient();
 
@@ -38,7 +37,6 @@ const App = () => (
           <Route path="/history" element={<History />} />
           <Route path="/points-membership" element={<PointsMembership />} />
           <Route path="/payment-methods" element={<PaymentMethods />} />
-          <Route path="/admin/register-gifticon" element={<RegisterGifticon />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

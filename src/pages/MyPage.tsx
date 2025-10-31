@@ -120,9 +120,7 @@ const MyPage = () => {
     { icon: Settings, label: "설정", path: "/settings" },
   ];
 
-  const adminMenuItems = [
-    { icon: Package, label: "기프티콘 등록", path: "/admin/register-gifticon" },
-  ];
+  const adminMenuItems: Array<{ icon: typeof Package; label: string; path: string }> = [];
 
   if (loading) {
     return (

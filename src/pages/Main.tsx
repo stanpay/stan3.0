@@ -262,6 +262,12 @@ const Main = () => {
         console.log("📦 [더미 데이터] 사용");
         setCurrentLocation("강남구 역삼동");
         setStores(dummyStores);
+        // localStorage에 더미 데이터 저장 (Payment 페이지에서 사용)
+        try {
+          localStorage.setItem('nearbyStores', JSON.stringify(dummyStores));
+        } catch (e) {
+          console.error("localStorage 저장 오류:", e);
+        }
         setIsLoadingLocation(false);
         setIsLoadingStores(false);
         return;

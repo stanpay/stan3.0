@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface Gifticon {
   id: string;
@@ -20,6 +21,7 @@ interface Gifticon {
 
 const MyGifticons = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const [filterStatus, setFilterStatus] = useState<"전체" | "사용가능" | "사용완료" | "판매완료">("전체");
   const [subFilter, setSubFilter] = useState<"전체" | "보유중" | "판매중">("전체");
@@ -195,6 +197,16 @@ const MyGifticons = () => {
       setGifticons(prev => prev.map(g =>
         g.id === id ? { ...g, status: '사용가능' as const } : g
       ));
+      toast({
+        title: "복구 완료",
+        description: "기프티콘이 사용가능 상태로 변경되었습니다.",
+      });
+    } else {
+      toast({
+        title: "복구 실패",
+        description: error.message || "기프티콘 복구 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
     }
   };
 
