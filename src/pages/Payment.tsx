@@ -739,22 +739,46 @@ const Payment = () => {
 
     // 개수만큼 기프티콘 ID 조회 및 대기중으로 변경
     try {
-      // 이미 대기중인 기프티콘 중 reserved_by가 null인 것부터 조회
-      const { data: availableItems, error: fetchError } = await supabase
+      let idsToReserve: string[] = [];
+      let availableItems: any[] = [];
+      let soldItems: any[] = [];
+
+      // 1. 먼저 이미 내가 예약한 대기중 기프티콘 조회 (우선순위 1)
+      const { data: myReservedItems, error: fetchMyError } = await supabase
         .from('used_gifticons')
         .select('id')
         .eq('status', '대기중')
         .eq('available_at', storeBrand)
         .eq('sale_price', gifticon.sale_price)
-        .is('reserved_by', null)
+        .eq('reserved_by', session.user.id)
         .limit(newCount);
 
-      if (fetchError) throw fetchError;
+      if (fetchMyError) throw fetchMyError;
+      if (myReservedItems) {
+        idsToReserve = myReservedItems.map(item => item.id);
+      }
 
-      // reserved_by가 null인 대기중 기프티콘이 부족하면 판매중인 것도 가져오기
-      let idsToReserve = availableItems.map(item => item.id);
+      // 2. 내가 예약한 것들로 부족하면, reserved_by가 null인 대기중 기프티콘 조회 (우선순위 2)
       if (idsToReserve.length < newCount) {
-        const { data: soldItems, error: soldError } = await supabase
+        const { data: availableData, error: fetchAvailableError } = await supabase
+          .from('used_gifticons')
+          .select('id')
+          .eq('status', '대기중')
+          .eq('available_at', storeBrand)
+          .eq('sale_price', gifticon.sale_price)
+          .is('reserved_by', null)
+          .limit(newCount - idsToReserve.length);
+
+        if (fetchAvailableError) throw fetchAvailableError;
+        if (availableData) {
+          availableItems = availableData;
+          idsToReserve = [...idsToReserve, ...availableItems.map(item => item.id)];
+        }
+      }
+
+      // 3. 여전히 부족하면 판매중인 기프티콘도 가져오기 (우선순위 3)
+      if (idsToReserve.length < newCount) {
+        const { data: soldData, error: soldError } = await supabase
           .from('used_gifticons')
           .select('id')
           .eq('status', '판매중')
@@ -763,7 +787,8 @@ const Payment = () => {
           .limit(newCount - idsToReserve.length);
 
         if (soldError) throw soldError;
-        if (soldItems) {
+        if (soldData) {
+          soldItems = soldData;
           idsToReserve = [...idsToReserve, ...soldItems.map(item => item.id)];
         }
       }
@@ -773,24 +798,42 @@ const Payment = () => {
         return;
       }
 
-      // 대기중으로 변경 및 reserved_by 설정
-      const { error: updateError } = await supabase
-        .from('used_gifticons')
-        .update({
-          status: '대기중',
-          reserved_by: session.user.id,
-          reserved_at: new Date().toISOString()
-        })
-        .in('id', idsToReserve);
+      // 대기중이 아니거나 reserved_by가 다른 기프티콘만 업데이트
+      const myReservedIds = myReservedItems?.map(item => item.id) || [];
+      const availableIds = availableItems.map(item => item.id) || [];
+      const soldIds = soldItems.map(item => item.id) || [];
 
-      if (updateError) {
-        console.error("기프티콘 예약 오류 상세:", {
-          error: updateError,
-          userId: session.user.id,
-          idsToReserve,
-          idsCount: idsToReserve.length
-        });
-        throw updateError;
+      // availableItems는 이미 대기중이므로 reserved_by만 업데이트
+      if (availableIds.length > 0) {
+        const { error: updateAvailableError } = await supabase
+          .from('used_gifticons')
+          .update({
+            reserved_by: session.user.id,
+            reserved_at: new Date().toISOString()
+          })
+          .in('id', availableIds);
+
+        if (updateAvailableError) {
+          console.error("기프티콘 예약 오류 (available):", updateAvailableError);
+          throw updateAvailableError;
+        }
+      }
+
+      // soldItems는 판매중이므로 대기중으로 변경
+      if (soldIds.length > 0) {
+        const { error: updateSoldError } = await supabase
+          .from('used_gifticons')
+          .update({
+            status: '대기중',
+            reserved_by: session.user.id,
+            reserved_at: new Date().toISOString()
+          })
+          .in('id', soldIds);
+
+        if (updateSoldError) {
+          console.error("기프티콘 예약 오류 (sold):", updateSoldError);
+          throw updateSoldError;
+        }
       }
 
       // 선택 상태 업데이트

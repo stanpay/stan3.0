@@ -23,7 +23,7 @@ const ChatSupport = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
-      text: "안녕하세요! 스탠 고객지원팀입니다. 무엇을 도와드릴까요?",
+      text: "안녕하세요! 스탠 고객지원팀입니다. 무엇을 도와드릴까요?\n\n문제 발생 시 010-8767-5708로 연락주세요",
       sender: "support",
       timestamp: new Date(),
     },
@@ -168,7 +168,7 @@ const ChatSupport = () => {
                         : "bg-muted text-foreground"
                     }`}
                   >
-                    <p className="text-sm">{message.text}</p>
+                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
                     <p className="text-xs opacity-70 mt-1">
                       {message.timestamp.toLocaleTimeString("ko-KR", {
                         hour: "2-digit",
