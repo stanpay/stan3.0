@@ -744,12 +744,16 @@ const Payment = () => {
       // 선택한 기프티콘의 original_price 기준으로 천원대 계산
       const selectedPriceRange = getPriceRange(selectedGifticon.original_price);
       
+      console.log(`[기프티콘 추가 로드] 선택한 기프티콘: original_price=${selectedGifticon.original_price}, sale_price=${selectedGifticon.sale_price}, 천원대=${selectedPriceRange}`);
+      
       // 현재 이미 불러온 기프티콘의 ID 목록 (중복 방지용)
       const existingGifticonIds = new Set(gifticons.map(g => g.id));
       
       // 같은 천원대의 새로운 기프티콘 조회 (original_price 기준)
       const priceMin = selectedPriceRange;
       const priceMax = selectedPriceRange + 999;
+
+      console.log(`[기프티콘 추가 로드] 조회 범위: ${priceMin}원 ~ ${priceMax}원`);
 
       const { data: similarData, error: fetchError } = await supabase
         .from('used_gifticons')
@@ -759,14 +763,27 @@ const Payment = () => {
         .gte('original_price', priceMin)
         .lte('original_price', priceMax);
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error("[기프티콘 추가 로드] 조회 오류:", fetchError);
+        throw fetchError;
+      }
 
-      if (!similarData || similarData.length === 0) return;
+      if (!similarData || similarData.length === 0) {
+        console.log(`[기프티콘 추가 로드] 같은 천원대(${selectedPriceRange}원)의 판매중인 기프티콘이 없습니다.`);
+        return;
+      }
+
+      console.log(`[기프티콘 추가 로드] 조회된 기프티콘 수: ${similarData.length}`);
 
       // 이미 불러온 기프티콘 제외 (ID 기준)
       const newData = similarData.filter(item => !existingGifticonIds.has(item.id));
 
-      if (newData.length === 0) return;
+      console.log(`[기프티콘 추가 로드] 새로운 기프티콘 수: ${newData.length}`);
+
+      if (newData.length === 0) {
+        console.log(`[기프티콘 추가 로드] 같은 천원대(${selectedPriceRange}원)의 새로운 기프티콘이 없습니다.`);
+        return;
+      }
 
       // 할인율 계산하여 정렬 (할인율 많은 순)
       newData.sort((a, b) => {
@@ -777,6 +794,8 @@ const Payment = () => {
 
       // 같은 천원대 내에서 할인율이 높은 순으로 하나 선택
       const selectedGifticonToAdd = newData[0];
+
+      console.log(`[기프티콘 추가 로드] 선택된 기프티콘: id=${selectedGifticonToAdd.id}, original_price=${selectedGifticonToAdd.original_price}, sale_price=${selectedGifticonToAdd.sale_price}, 할인율=${getDiscountRate(selectedGifticonToAdd.original_price, selectedGifticonToAdd.sale_price)}%`);
 
       // 선택한 기프티콘을 대기중으로 변경
       const { error: reserveError } = await supabase
@@ -789,7 +808,7 @@ const Payment = () => {
         .eq('id', selectedGifticonToAdd.id);
 
       if (reserveError) {
-        console.error("기프티콘 예약 오류:", reserveError);
+        console.error("[기프티콘 추가 로드] 예약 오류:", reserveError);
         return;
       }
 
@@ -804,8 +823,10 @@ const Payment = () => {
         });
         return combined;
       });
+
+      console.log(`[기프티콘 추가 로드] 성공: ${selectedGifticonToAdd.original_price}원 기프티콘 추가됨`);
     } catch (error: any) {
-      console.error("비슷한 가격대 기프티콘 로드 오류:", error);
+      console.error("[기프티콘 추가 로드] 전체 오류:", error);
     }
   };
 
@@ -895,22 +916,24 @@ const Payment = () => {
         let reservedId = gifticon.id;
 
         // 현재 기프티콘이 이미 대기중인지 확인
-        if (gifticon.id && selectedGifticons.size === 0) {
-          // 대기중 상태 확인 (이미 fetchGifticons에서 대기중으로 설정되어 있을 수 있음)
+        // 이미 화면에 표시된 기프티콘은 이미 대기중 상태이므로 그대로 사용
+        if (gifticon.id) {
           reservedId = gifticon.id;
         } else {
           // 판매중인 기프티콘 중에서 하나 선택하여 대기중으로 변경
-          const { data: availableItem, error: fetchError } = await supabase
+          const { data: availableItems, error: fetchError } = await supabase
             .from('used_gifticons')
             .select('id')
             .eq('status', '판매중')
             .eq('available_at', storeBrand)
             .eq('sale_price', gifticon.sale_price)
-            .limit(1)
-            .single();
+            .limit(1);
 
-          if (!fetchError && availableItem) {
-            reservedId = availableItem.id;
+          if (!fetchError && availableItems && availableItems.length > 0) {
+            reservedId = availableItems[0].id;
+          } else {
+            // 판매중인 기프티콘이 없으면 에러
+            throw new Error("선택 가능한 기프티콘이 없습니다.");
           }
         }
 
