@@ -1456,7 +1456,7 @@ const Payment = () => {
   const handlePayWithNaverPay = () => {
     // 안드로이드 전용 - 네이버페이 앱 패키지명
     // intent:// 형식으로 앱 실행 (fallback URL 없이 직접 실행)
-    const intentUrl = "intent://launch#Intent;package=com.naverfin.payapp;end;";
+    const intentUrl = "intent://launch#Intent;scheme=naverpay;package=com.naverfin.payapp;end;";
     
     try {
       // iframe을 사용하여 인텐트 실행 시도 (더 안정적이고 플레이스토어로 가지 않음)
