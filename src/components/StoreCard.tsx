@@ -19,9 +19,9 @@ interface StoreCardProps {
 }
 
 const brandLogos: Record<string, string> = {
-  starbucks: "https://i.namu.wiki/i/j2uG0oGT3wrVr2SoqmAPs-tTDbpRMy13rbAkuB60OpbSH5X2L0TNa5D456eeYqlDE832etwUebQ6R_q56VoyZPSxDlTl6Fs9nqcSSWKzjpbCVAFDDwS-XMwic7e9xGPkU6BjFGV-bACJVMJJGfdtpA.svg",
-  baskin: "https://i.namu.wiki/i/Hul5w8GKariLeNjwOLD1ynOaxHclsA3ShBupmWUHVp-qEv7jLEqXV9ubh3OARuZ7E6KeyrB8RXT6THbwhhXnVSLxAWNdoi4MQ7GoEVHUMrMD6wrQis7otb4j2qCF_VmHQbHnmiAmSTJkm3J4vSlCpQ.svg",
-  mega: "https://i.namu.wiki/i/How4F3VhKeoQ_71vK2j-B-9frLmAcaTQ0h9Qk34yiwS8SYqVa0sTZ2J8k5j8Fk2MneMUhNCQ-WNGMy_Bgf5hDso5IcLSvo1OEXNR9g50sKuNmgO5dcMW1ZdOnG27guwYRkpSm9O_t6BopT8tSJrMCA.svg",
+  starbucks: "https://search.pstatic.net/common/?src=http%3A%2F%2Fblogfiles.naver.net%2FMjAyNTA4MjlfMjgx%2FMDAxNzU2NDc1MzQ5MDg3.DfBA7igmTBTBDImxB5xYeYo2u0CkoEE7koZ4ftZd88kg.38N8phV00xjgzB4Nxlokk5y-5jQlNguJKmhDGEKH0Tog.PNG%2F4.png&type=sc960_832",
+  baskin: "https://search.pstatic.net/common/?src=http%3A%2F%2Fblogfiles.naver.net%2FMjAyMzAyMjJfODMg%2FMDAxNjc3MDY4NjQ1NTI5.M_v0jLl65iN6AZLntTDRNHLnKpFZo9qV8PLwsOTvC_Ug.t8CrUh9Qz--ZORSdxyWEIwo2ShJTpngAmJ4-1A5ulFkg.PNG.futurara%2F%25BA%25A3%25B6%25F3%25B7%25CE%25B0%25ED.png&type=a340",
+  mega: "https://img.79plus.co.kr/megahp/common/img/new_logo.png",
   pascucci: "https://www.pascucci.co.kr/lib/images/common/foot_logo2.png",
   twosome: "https://www.twosome.co.kr/resources/images/content/bi_img_logo_.svg",
 };
@@ -95,7 +95,7 @@ const StoreCard = ({
               <span className="break-words">{distance}</span>
             </div>
             {(showLocalCurrencyChip || showParkingChip) && (
-              <div className="flex flex-nowrap gap-1 overflow-x-auto">
+              <div className="flex flex-nowrap gap-1 overflow-x-auto scrollbar-hide">
                 {showLocalCurrencyChip && (
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 whitespace-nowrap shrink-0">
                     지역화폐 {local_currency_discount_rate}%할인
