@@ -69,6 +69,8 @@ const Payment = () => {
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState<boolean>(true);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [inputBudget, setInputBudget] = useState<number | null>(null); // 입력된 예산
+  const [isAutoSelectMode, setIsAutoSelectMode] = useState<boolean>(false); // 자동선택 모드 여부
+  const [autoSelectedGifticons, setAutoSelectedGifticons] = useState<UsedGifticon[]>([]); // 자동선택 모드의 기프티콘 목록
 
   // 기프티콘 할인율 중 최대값 계산
   const maxGifticonDiscount = useMemo(() => {
@@ -827,7 +829,7 @@ const Payment = () => {
       return;
     }
 
-    // 기존 선택/대기중인 기프티콘들을 판매중으로 복구
+    // 모든 기존 대기중 기프티콘을 판매중으로 복구 (모드 전환 시 완전 초기화)
     try {
       // 선택된 기프티콘 중 대기중인 것들을 판매중으로 복구
       const reservedIds: string[] = [];
@@ -868,8 +870,12 @@ const Payment = () => {
       console.error("기존 기프티콘 상태 복구 오류:", error);
     }
 
-    // 기존 선택 초기화
+    // 기존 선택 및 상태 완전 초기화 (추천 모드 정보 모두 제거)
     setSelectedGifticons(new Map());
+    setAddedGifticonRelations(new Map());
+    setInitialGifticonIds(new Set());
+    setGifticonLoadOrder(new Map());
+    setGifticons([]);
     setIsLoading(true);
 
     try {
@@ -905,9 +911,9 @@ const Payment = () => {
 
       // 그리디 방식으로 예산 내에서 자동 선택
       const selectedGifticonsMap = new Map<string, SelectedGifticon>();
+      const autoSelectedList: UsedGifticon[] = []; // 자동선택된 기프티콘 목록 저장
       let remainingOriginalPriceBudget = inputBudget; // 총 기프티콘 금액권 예산
       let totalSalePrice = 0; // 총 구매 포인트
-      const reservedIds: string[] = [];
 
       for (const gifticon of autoSelectList) {
         // original_price가 남은 예산을 넘지 않으면 선택 가능
@@ -936,6 +942,7 @@ const Payment = () => {
                 sale_price: gifticon.sale_price,
                 reservedId: gifticon.id
               });
+              autoSelectedList.push(gifticon);
               remainingOriginalPriceBudget -= gifticon.original_price;
               totalSalePrice += gifticon.sale_price;
             }
@@ -943,7 +950,10 @@ const Payment = () => {
         }
       }
 
+      // 자동선택 모드로 전환
+      setAutoSelectedGifticons(autoSelectedList);
       setSelectedGifticons(selectedGifticonsMap);
+      setIsAutoSelectMode(true);
       setIsLoading(false);
 
       if (selectedGifticonsMap.size > 0) {
@@ -961,23 +971,36 @@ const Payment = () => {
   // 취소 버튼 클릭 시 선택된 기프티콘 해제 및 추천 기프티콘 다시 불러오기
   const cancelAutoSelect = async () => {
     if (!isLoggedIn || !storeBrand) {
+      // 자동선택 모드 상태 초기화
       setSelectedGifticons(new Map());
+      setAutoSelectedGifticons([]);
+      setIsAutoSelectMode(false);
       setInputBudget(null);
       return;
     }
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) {
+      // 자동선택 모드 상태 초기화
       setSelectedGifticons(new Map());
+      setAutoSelectedGifticons([]);
+      setIsAutoSelectMode(false);
       setInputBudget(null);
       return;
     }
 
     try {
-      // 선택된 기프티콘 중 대기중인 것들을 판매중으로 복구
+      // 자동선택 모드의 모든 대기중 기프티콘을 판매중으로 복구 (모드 전환 시 완전 초기화)
       const reservedIds: string[] = [];
       selectedGifticons.forEach((selected) => {
         reservedIds.push(selected.reservedId);
+      });
+
+      // 자동선택된 기프티콘 목록의 모든 항목도 복구
+      autoSelectedGifticons.forEach((gifticon) => {
+        if (!reservedIds.includes(gifticon.id)) {
+          reservedIds.push(gifticon.id);
+        }
       });
 
       if (reservedIds.length > 0) {
@@ -994,9 +1017,14 @@ const Payment = () => {
       console.error("기프티콘 상태 복구 오류:", error);
     }
 
-    // 선택 초기화 및 입력 금액 초기화
+    // 자동선택 모드 상태 완전 초기화
     setSelectedGifticons(new Map());
+    setAutoSelectedGifticons([]);
+    setIsAutoSelectMode(false);
     setInputBudget(null);
+    setAddedGifticonRelations(new Map());
+    setInitialGifticonIds(new Set());
+    setGifticonLoadOrder(new Map());
 
     // 추천 기프티콘 다시 불러오기
     setIsLoading(true);
@@ -1127,6 +1155,9 @@ const Payment = () => {
   // 비슷한 가격대 기프티콘 추가 로드 (할인율 순)
   const loadSimilarPriceGifticons = async (selectedGifticon: UsedGifticon) => {
     if (!isLoggedIn || !storeBrand) return;
+    
+    // 자동선택 모드에서는 추가 로드하지 않음
+    if (isAutoSelectMode) return;
 
     // 이미 이 기프티콘에 대한 추가 로드가 진행 중이면 중복 방지
     if (loadingGifticonIds.current.has(selectedGifticon.id)) {
@@ -1353,6 +1384,30 @@ const Payment = () => {
       if (!session?.user) return;
 
       try {
+        // 자동선택 모드에서는 간단하게 처리 (추가 기프티콘이 없으므로)
+        if (isAutoSelectMode) {
+          // 선택된 기프티콘을 판매중으로 복구
+          const { error } = await supabase
+            .from('used_gifticons')
+            .update({
+              status: '판매중',
+              reserved_by: null,
+              reserved_at: null
+            })
+            .eq('id', currentSelected.reservedId);
+
+          if (error) throw error;
+
+          // 선택 상태에서 제거 (화면은 유지)
+          const newMap = new Map(selectedGifticons);
+          newMap.delete(gifticon.id);
+          setSelectedGifticons(newMap);
+
+          toast.success("선택이 취소되었습니다.");
+          return;
+        }
+
+        // 추천 모드에서의 처리 (기존 로직)
         // 이 기프티콘이 추가로 불러온 기프티콘인지 확인
         const parentId = addedGifticonRelations.get(gifticon.id);
         const isAddedGifticon = parentId !== undefined;
@@ -1478,6 +1533,12 @@ const Payment = () => {
       }
     } else {
       // 선택
+      // 자동선택 모드에서는 선택 추가 불가능 (선택 해제만 가능)
+      if (isAutoSelectMode) {
+        toast.error("자동선택 모드에서는 기프티콘을 추가로 선택할 수 없습니다.");
+        return;
+      }
+
       // 포인트 한도 체크
       const totalCost = Array.from(selectedGifticons.values())
         .reduce((sum, item) => sum + item.sale_price, 0);
@@ -1578,7 +1639,9 @@ const Payment = () => {
   // 총 기프티콘 금액권 계산 (original_price 합계)
   const totalOriginalPrice = Array.from(selectedGifticons.values())
     .reduce((sum, item) => {
-      const gifticon = gifticons.find(g => g.sale_price === item.sale_price);
+      // 자동선택 모드에서는 autoSelectedGifticons에서 찾기
+      const sourceList = isAutoSelectMode ? autoSelectedGifticons : gifticons;
+      const gifticon = sourceList.find(g => g.id === item.id);
       if (gifticon) {
         return sum + gifticon.original_price;
       }
@@ -1588,7 +1651,9 @@ const Payment = () => {
   // 총 할인 금액 계산
   const totalDiscount = Array.from(selectedGifticons.values())
     .reduce((sum, item) => {
-      const gifticon = gifticons.find(g => g.sale_price === item.sale_price);
+      // 자동선택 모드에서는 autoSelectedGifticons에서 찾기
+      const sourceList = isAutoSelectMode ? autoSelectedGifticons : gifticons;
+      const gifticon = sourceList.find(g => g.id === item.id);
       if (gifticon) {
         const discountPerItem = gifticon.original_price - gifticon.sale_price;
         return sum + discountPerItem;
@@ -1639,9 +1704,11 @@ const Payment = () => {
       const allReservedIds: string[] = [];
       const purchasedGifticonsData: Array<{ gifticon: UsedGifticon; reservedId: string }> = [];
       
+      // 자동선택 모드에서는 autoSelectedGifticons에서 찾기
+      const sourceList = isAutoSelectMode ? autoSelectedGifticons : gifticons;
       for (const selected of selectedGifticons.values()) {
         allReservedIds.push(selected.reservedId);
-        const gifticon = gifticons.find(g => g.sale_price === selected.sale_price);
+        const gifticon = sourceList.find(g => g.id === selected.id);
         if (gifticon) {
           purchasedGifticonsData.push({ gifticon, reservedId: selected.reservedId });
         }
@@ -1854,8 +1921,10 @@ const Payment = () => {
 
   // 선택한 기프티콘 목록 생성
   const purchasedGifticonsList: Array<{ id: string; gifticon: UsedGifticon }> = [];
+  // 자동선택 모드에서는 autoSelectedGifticons에서 찾기
+  const sourceList = isAutoSelectMode ? autoSelectedGifticons : gifticons;
   for (const selected of selectedGifticons.values()) {
-    const gifticon = gifticons.find(g => g.sale_price === selected.sale_price);
+    const gifticon = sourceList.find(g => g.id === selected.id);
     if (gifticon) {
       purchasedGifticonsList.push({ id: selected.reservedId || gifticon.id, gifticon });
     }
@@ -2119,14 +2188,15 @@ const Payment = () => {
                       className="flex-1"
                       min="0"
                     />
-                    <Button
-                      onClick={executeAutoSelect}
-                      disabled={!inputBudget || inputBudget <= 0 || isLoading}
-                      className="shrink-0"
-                    >
-                      확인
-                    </Button>
-                    {selectedGifticons.size > 0 && (
+                    {!isAutoSelectMode ? (
+                      <Button
+                        onClick={executeAutoSelect}
+                        disabled={!inputBudget || inputBudget <= 0 || isLoading}
+                        className="shrink-0"
+                      >
+                        확인
+                      </Button>
+                    ) : (
                       <Button
                         onClick={cancelAutoSelect}
                         variant="outline"
@@ -2155,14 +2225,14 @@ const Payment = () => {
                 
                 {isLoading ? (
                       <div className="text-center py-8 text-muted-foreground">로딩 중...</div>
-                    ) : gifticons.length === 0 ? (
+                    ) : (isAutoSelectMode ? autoSelectedGifticons : gifticons).length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         등록된 기프티콘이 없습니다.
                       </div>
                     ) : (
                       <>
                         <div className="space-y-3">
-                          {gifticons.map((gifticon) => {
+                          {(isAutoSelectMode ? autoSelectedGifticons : gifticons).map((gifticon) => {
                           const isSelected = selectedGifticons.has(gifticon.id);
                           const discountAmount = gifticon.original_price - gifticon.sale_price;
                           const discountPercent = Math.round((discountAmount / gifticon.original_price) * 100);
@@ -2193,7 +2263,7 @@ const Payment = () => {
                                 <div className="flex items-center">
                                   <Checkbox
                                     checked={isSelected}
-                                    disabled={isLoading || (!isSelected && totalCost + gifticon.sale_price > userPoints)}
+                                    disabled={isLoading || (!isSelected && totalCost + gifticon.sale_price > userPoints) || (isAutoSelectMode && !isSelected)}
                                     className="w-5 h-5"
                                   />
                                 </div>
