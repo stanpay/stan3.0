@@ -1857,6 +1857,7 @@ const Payment = () => {
           expiry_date: item.expiry_date,
           status: '사용가능', // 초기 상태는 사용가능 (step 2 진입 시 사용완료로 변경)
           is_selling: false,
+          barcode: item.barcode, // 바코드도 함께 저장
         }));
 
         const { error: insertError } = await supabase
