@@ -1382,8 +1382,8 @@ const Payment = () => {
         let gifticonsToRemove: string[] = [];
         
         if (currentIndex !== -1) {
-          // 자기 자신도 첫 번째가 아니면 제거
-          if (currentIndex > 0) {
+          // 자기 자신도 초기 기프티콘이 아니면 제거
+          if (!initialGifticonIds.has(gifticon.id)) {
             gifticonsToRemove.push(gifticon.id);
           }
           
@@ -1402,9 +1402,8 @@ const Payment = () => {
         // 화면에서 제거
         setGifticons(prev => {
           const remaining = prev.filter(g => {
-            // 초기 로딩된 기프티콘은 항상 유지 (단, 현재 기프티콘이 첫 번째가 아니면 제거 가능)
+            // 초기 로딩된 기프티콘은 항상 유지
             if (initialGifticonIds.has(g.id)) {
-              if (gifticonsToRemove.includes(g.id)) return false;
               return true;
             }
             // 제거 대상 추가 기프티콘만 제거
@@ -1495,17 +1494,19 @@ const Payment = () => {
           newMap.delete(gifticon.id);
           setSelectedGifticons(newMap);
           
-          // 판매중으로 복구
-          const { error } = await supabase
-            .from('used_gifticons')
-            .update({
-              status: '판매중',
-              reserved_by: null,
-              reserved_at: null
-            })
-            .eq('id', currentSelected.reservedId);
-          
-          if (error) throw error;
+          // 초기 기프티콘이 아니면 판매중으로 복구
+          if (!initialGifticonIds.has(gifticon.id)) {
+            const { error } = await supabase
+              .from('used_gifticons')
+              .update({
+                status: '판매중',
+                reserved_by: null,
+                reserved_at: null
+              })
+              .eq('id', currentSelected.reservedId);
+            
+            if (error) throw error;
+          }
           
           toast.success("선택이 취소되었습니다.");
           return;
@@ -1515,9 +1516,9 @@ const Payment = () => {
         const gifticonsToRelease: string[] = [];
         const gifticonsToRemove: string[] = [];
         
-        // 자기 자신도 첫 번째가 아니면 판매중으로 변경
-        if (currentIndex > 0) {
-          // 첫 번째가 아니면 자신도 판매중으로 변경
+        // 자기 자신도 초기 기프티콘이 아니면 판매중으로 변경
+        if (!initialGifticonIds.has(gifticon.id)) {
+          // 초기 기프티콘이 아니면 자신도 판매중으로 변경
           gifticonsToRelease.push(currentSelected.reservedId);
           gifticonsToRemove.push(gifticon.id);
         }
@@ -2279,13 +2280,28 @@ const Payment = () => {
                         확인
                       </Button>
                     ) : (
-                      <Button
-                        onClick={cancelAutoSelect}
-                        variant="outline"
-                        className="shrink-0"
-                      >
-                        취소
-                      </Button>
+                      <>
+                        <Button
+                          onClick={() => {
+                            if (!inputBudget || inputBudget <= 0) {
+                              toast.error("금액을 입력해주세요.");
+                              return;
+                            }
+                            executeAutoSelect();
+                          }}
+                          disabled={!inputBudget || inputBudget <= 0 || isLoading}
+                          className="shrink-0"
+                        >
+                          수정
+                        </Button>
+                        <Button
+                          onClick={cancelAutoSelect}
+                          variant="outline"
+                          className="shrink-0"
+                        >
+                          취소
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -2296,7 +2312,7 @@ const Payment = () => {
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                         <Gift className="w-5 h-5 text-primary" />
                       </div>
-                      <h2 className="text-lg font-bold">
+                      <h2 className={isAutoSelectMode ? "text-base font-bold" : "text-lg font-bold"}>
                         {isAutoSelectMode ? "기프티콘 자동선택" : "추천 기프티콘"}
                       </h2>
                     </div>
