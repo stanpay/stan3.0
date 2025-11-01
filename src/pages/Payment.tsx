@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Gift, CreditCard, Plus, Minus, Trash2 } from "lucide-react";
+import { ArrowLeft, Gift, CreditCard, Plus, Minus, Trash2, Loader2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useState, useEffect, useMemo } from "react";
@@ -51,6 +51,8 @@ const Payment = () => {
     parking_size: string | null;
   } | null>(null);
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<Set<string>>(new Set());
+  const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState<boolean>(true);
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
 
   // 기프티콘 할인율 중 최대값 계산
   const maxGifticonDiscount = useMemo(() => {
@@ -213,7 +215,10 @@ const Payment = () => {
   // 프랜차이즈 및 매장 정보 조회
   useEffect(() => {
     const fetchFranchiseAndStoreInfo = async () => {
-      if (!storeBrand) return;
+      if (!storeBrand) {
+        setIsLoadingPaymentMethods(false);
+        return;
+      }
 
       try {
         // 1. 프랜차이즈 정보 조회
@@ -225,6 +230,7 @@ const Payment = () => {
 
         if (franchiseError && franchiseError.code !== 'PGRST116') {
           console.error("프랜차이즈 조회 오류:", franchiseError);
+          setIsLoadingPaymentMethods(false);
           return;
         }
 
@@ -239,13 +245,20 @@ const Payment = () => {
 
           if (paymentMethodsError) {
             console.error("결제 방식 조회 오류:", paymentMethodsError);
+            setIsLoadingPaymentMethods(false);
           } else if (paymentMethodsData) {
             setFranchisePaymentMethods(paymentMethodsData.map((pm: any) => ({
               method_name: pm.method_name,
               method_type: pm.method_type,
               rate: pm.rate,
             })));
+            setIsLoadingPaymentMethods(false);
+          } else {
+            setIsLoadingPaymentMethods(false);
           }
+        } else {
+          // 프랜차이즈 정보가 없으면 로딩 완료
+          setIsLoadingPaymentMethods(false);
         }
 
         // 3. 매장 정보 조회 (storeId를 기반으로)
@@ -292,6 +305,7 @@ const Payment = () => {
         }
       } catch (error) {
         console.error("프랜차이즈/매장 정보 조회 오류:", error);
+        setIsLoadingPaymentMethods(false);
       }
     };
 
@@ -331,10 +345,13 @@ const Payment = () => {
           description = `${method.rate}% 할인`;
         }
 
+        // 해피포인트와 투썸하트는 추후 서비스 예정으로 설정
+        const isComingSoon = method.method_name === '해피포인트' || method.method_name === '투썸하트';
+
         methods.push({
           id: `method-${method.method_name}`,
           name: method.method_name,
-          enabled: true,
+          enabled: !isComingSoon, // 해피포인트, 투썸하트는 false
           type: 'membership',
           method_type: method.method_type,
           rate: method.rate,
@@ -371,21 +388,14 @@ const Payment = () => {
       });
     }
 
-    // 기본값: 프랜차이즈 정보가 없는 경우 기존 방식 유지
-    if (methods.length === 0) {
-      return [
-        { 
-          id: "method2", 
-          name: "기프티콘 + 해피포인트 적립", 
-          enabled: true,
-          type: 'gifticon' as const,
-          description: canUseGifticon ? `기프티콘 ${maxGifticonDiscount}% 할인` : "적용",
-        },
-      ];
+    // 기본값 제거: 로딩 중이거나 정보가 없으면 빈 배열 반환
+    // 프랜차이즈 정보가 로딩 중이거나 없는 경우 빈 배열 반환하여 기본값이 표시되지 않도록 함
+    if (isLoadingPaymentMethods || (methods.length === 0 && !storeInfo)) {
+      return [];
     }
 
     return methods;
-  }, [franchisePaymentMethods, storeInfo, gifticons, maxGifticonDiscount]);
+  }, [franchisePaymentMethods, storeInfo, gifticons, maxGifticonDiscount, isLoadingPaymentMethods]);
 
 
   // 로그인 상태 확인
@@ -404,6 +414,21 @@ const Payment = () => {
     };
     checkAuth();
   }, []);
+
+  // 초기 데이터 로딩 완료 체크
+  useEffect(() => {
+    // storeBrand가 설정되고, 결제 방식 로딩이 완료되면 초기 로딩 종료
+    if (storeBrand && !isLoadingPaymentMethods) {
+      // 약간의 지연을 두고 초기 로딩 종료 (데이터 렌더링 완료 대기)
+      const timer = setTimeout(() => {
+        setIsInitialLoading(false);
+      }, 300);
+      return () => clearTimeout(timer);
+    } else if (!storeBrand) {
+      // storeBrand가 없으면 즉시 로딩 종료
+      setIsInitialLoading(false);
+    }
+  }, [storeBrand, isLoadingPaymentMethods]);
 
   // 사용자 포인트 조회
   useEffect(() => {
@@ -1001,6 +1026,18 @@ const Payment = () => {
     return () => clearTimeout(timer);
   }, [step, recentlyPurchasedCount, isLoggedIn]);
 
+  // 초기 로딩 중일 때 전체 로딩 화면 표시
+  if (isInitialLoading) {
+    return (
+      <div className="bg-background min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <p className="text-muted-foreground">데이터를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`bg-background ${step === 2 ? 'h-screen overflow-hidden' : 'min-h-screen pb-6'}`}>
       {step === 1 && (
@@ -1024,7 +1061,16 @@ const Payment = () => {
             {/* Payment Method Selection */}
             <div className="space-y-3">
               <h2 className="text-lg font-bold mb-4">결제방식 추천</h2>
-              {paymentMethods.map((method) => {
+              {isLoadingPaymentMethods ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <p className="text-muted-foreground">결제 방식 정보를 불러오는 중...</p>
+                </div>
+              ) : paymentMethods.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <p className="text-muted-foreground">사용 가능한 결제 방식이 없습니다.</p>
+                </div>
+              ) : (
+                paymentMethods.map((method) => {
                 const isSelected = selectedPaymentOptions.has(method.id);
                 const isEnabled = method.enabled || false;
                 const isGifticon = method.type === 'gifticon';
@@ -1117,7 +1163,8 @@ const Payment = () => {
                     </div>
                   </Card>
                 );
-              })}
+                })
+              )}
             </div>
 
             {/* Gifticon Section */}
@@ -1360,8 +1407,16 @@ const Payment = () => {
                     scrollSnapStop: 'always',
                   }}
                 >
-                  <Card className="p-4 rounded-2xl border-border/50">
-                    <div className="space-y-3">
+                  <Card className="p-4 rounded-2xl border-border/50 relative">
+                    {/* 추후 서비스 예정 오버레이 */}
+                    <div className="absolute inset-0 flex items-center justify-center z-10 bg-background/80 rounded-2xl">
+                      <div className="bg-muted/90 px-4 py-2 rounded-lg border-2 border-muted-foreground/50">
+                        <span className="text-sm font-semibold text-muted-foreground">
+                          추후 서비스 예정
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-3 opacity-50">
                       <BarcodeDisplay number="1234567890123" />
                       <div className="space-y-2">
                         <div className="flex items-center gap-3">
