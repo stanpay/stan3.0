@@ -69,7 +69,8 @@ const Payment = () => {
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState<boolean>(true);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [inputBudget, setInputBudget] = useState<number | null>(null); // 입력된 예산
-  const [isAutoSelectConfirmed, setIsAutoSelectConfirmed] = useState<boolean>(false); // 자동선택 확인 여부
+  const [isAutoSelectMode, setIsAutoSelectMode] = useState<boolean>(false); // 자동선택 모드 여부
+  const [autoSelectGifticons, setAutoSelectGifticons] = useState<UsedGifticon[]>([]); // 자동선택용 기프티콘 목록
 
   // 기프티콘 할인율 중 최대값 계산
   const maxGifticonDiscount = useMemo(() => {
@@ -810,15 +811,181 @@ const Payment = () => {
     return a.sale_price - b.sale_price;
   }, []);
 
-  // 자동선택 실행 함수 (확인 버튼 클릭 시 호출)
-  const executeAutoSelect = () => {
-    if (!inputBudget || inputBudget <= 0 || !canUseGifticon || gifticons.length === 0) {
+  // 자동선택 모드로 전환 (확인 버튼 클릭 시 호출)
+  const executeAutoSelect = async () => {
+    if (!inputBudget || inputBudget <= 0 || !canUseGifticon) {
       toast.error("금액을 입력해주세요.");
       return;
     }
 
-    // 할인효율 기준으로 정렬된 기프티콘 목록 생성 (이미 정렬되어 있을 수 있지만 확실하게 정렬)
-    const sortedGifticons = [...gifticons].sort(sortByDiscountEfficiency);
+    if (!isLoggedIn || !storeBrand) {
+      toast.error("로그인이 필요합니다.");
+      return;
+    }
+
+    // 기존 선택/대기중인 기프티콘들을 판매중으로 복구
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      try {
+        // 선택된 기프티콘 중 대기중인 것들을 판매중으로 복구
+        const reservedIds: string[] = [];
+        selectedGifticons.forEach((selected) => {
+          reservedIds.push(selected.reservedId);
+        });
+
+        if (reservedIds.length > 0) {
+          await supabase
+            .from('used_gifticons')
+            .update({
+              status: '판매중',
+              reserved_by: null,
+              reserved_at: null
+            })
+            .in('id', reservedIds);
+        }
+
+        // 기존 추천 기프티콘 중 대기중인 것들도 판매중으로 복구
+        const initialReservedIds: string[] = [];
+        gifticons.forEach((gifticon) => {
+          initialReservedIds.push(gifticon.id);
+        });
+
+        if (initialReservedIds.length > 0) {
+          await supabase
+            .from('used_gifticons')
+            .update({
+              status: '판매중',
+              reserved_by: null,
+              reserved_at: null
+            })
+            .eq('available_at', storeBrand)
+            .eq('status', '대기중')
+            .in('id', initialReservedIds);
+        }
+      } catch (error) {
+        console.error("기존 기프티콘 상태 복구 오류:", error);
+      }
+    }
+
+    // 기존 선택 초기화
+    setSelectedGifticons(new Map());
+    setIsLoading(true);
+
+    try {
+      // DB에서 자동선택용 기프티콘 새로 조회
+      const { data: autoSelectData, error: fetchError } = await supabase
+        .from('used_gifticons')
+        .select('*')
+        .eq('status', '판매중')
+        .eq('available_at', storeBrand);
+
+      if (fetchError) throw fetchError;
+
+      if (!autoSelectData || autoSelectData.length === 0) {
+        setAutoSelectGifticons([]);
+        setIsAutoSelectMode(true);
+        setIsLoading(false);
+        toast.error("사용 가능한 기프티콘이 없습니다.");
+        return;
+      }
+
+      // 할인효율 기준으로 정렬
+      const sortedData = [...autoSelectData].sort(sortByDiscountEfficiency);
+
+      // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
+      const groupedByThousand = new Map<number, UsedGifticon>();
+      sortedData.forEach((item) => {
+        const priceRange = getPriceRange(item.original_price);
+        if (!groupedByThousand.has(priceRange)) {
+          groupedByThousand.set(priceRange, item);
+        }
+      });
+
+      // 그룹화된 항목들을 배열로 변환
+      const autoSelectList: UsedGifticon[] = Array.from(groupedByThousand.values());
+
+      setAutoSelectGifticons(autoSelectList);
+      setIsAutoSelectMode(true);
+      setIsLoading(false);
+    } catch (error: any) {
+      console.error("자동선택 기프티콘 조회 오류:", error);
+      toast.error("기프티콘을 불러오는 중 오류가 발생했습니다.");
+      setIsLoading(false);
+    }
+  };
+
+  // 자동선택 취소 (취소 버튼 클릭 시 호출)
+  const cancelAutoSelect = async () => {
+    if (!isLoggedIn || !storeBrand) {
+      setIsAutoSelectMode(false);
+      setAutoSelectGifticons([]);
+      setSelectedGifticons(new Map());
+      return;
+    }
+
+    // 자동선택 모드에서 선택/대기중인 기프티콘들을 판매중으로 복구
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      try {
+        // 선택된 기프티콘 중 대기중인 것들을 판매중으로 복구
+        const reservedIds: string[] = [];
+        selectedGifticons.forEach((selected) => {
+          reservedIds.push(selected.reservedId);
+        });
+
+        if (reservedIds.length > 0) {
+          await supabase
+            .from('used_gifticons')
+            .update({
+              status: '판매중',
+              reserved_by: null,
+              reserved_at: null
+            })
+            .in('id', reservedIds);
+        }
+
+        // 자동선택 기프티콘 중 대기중인 것들도 판매중으로 복구
+        const autoSelectReservedIds: string[] = [];
+        autoSelectGifticons.forEach((gifticon) => {
+          autoSelectReservedIds.push(gifticon.id);
+        });
+
+        if (autoSelectReservedIds.length > 0) {
+          await supabase
+            .from('used_gifticons')
+            .update({
+              status: '판매중',
+              reserved_by: null,
+              reserved_at: null
+            })
+            .eq('available_at', storeBrand)
+            .eq('status', '대기중')
+            .in('id', autoSelectReservedIds);
+        }
+      } catch (error) {
+        console.error("자동선택 기프티콘 상태 복구 오류:", error);
+      }
+    }
+
+    // 상태 초기화 및 추천 기프티콘으로 전환
+    setIsAutoSelectMode(false);
+    setAutoSelectGifticons([]);
+    setSelectedGifticons(new Map());
+    
+    // 추천 기프티콘 다시 로드
+    // fetchGifticons는 이미 useEffect로 관리되고 있으므로 storeBrand나 isLoggedIn이 변경되면 자동으로 재로드됨
+    // 하지만 여기서는 강제로 재로드하기 위해 간단히 처리
+  };
+
+  // 자동선택 실행 (확인 버튼으로 기프티콘 선택)
+  const runAutoSelect = () => {
+    if (!inputBudget || inputBudget <= 0 || !canUseGifticon || autoSelectGifticons.length === 0) {
+      toast.error("금액을 입력해주세요.");
+      return;
+    }
+
+    // 할인효율 기준으로 정렬된 기프티콘 목록 (이미 정렬되어 있음)
+    const sortedGifticons = [...autoSelectGifticons].sort(sortByDiscountEfficiency);
 
     // 그리디 방식으로 예산 내에서 선택
     // 중요: 총 기프티콘 금액권(original_price 합계)이 입력 금액을 넘지 않아야 함
@@ -836,7 +1003,7 @@ const Payment = () => {
             selectedGifticonsMap.set(key, {
               id: gifticon.id,
               sale_price: gifticon.sale_price,
-              reservedId: gifticon.id // 일단 id 사용, 실제로는 handleToggle과 유사하게 처리 필요
+              reservedId: gifticon.id
             });
             remainingOriginalPriceBudget -= gifticon.original_price;
             totalSalePrice += gifticon.sale_price;
@@ -846,7 +1013,6 @@ const Payment = () => {
     }
 
     setSelectedGifticons(selectedGifticonsMap);
-    setIsAutoSelectConfirmed(true);
     toast.success("기프티콘이 자동으로 선택되었습니다.");
   };
 
@@ -1835,25 +2001,34 @@ const Payment = () => {
                         const value = e.target.value;
                         if (value === "") {
                           setInputBudget(null);
-                          setIsAutoSelectConfirmed(false);
                         } else {
                           const numValue = parseInt(value, 10);
                           if (!isNaN(numValue) && numValue > 0) {
                             setInputBudget(numValue);
-                            setIsAutoSelectConfirmed(false);
                           }
                         }
                       }}
                       className="flex-1"
                       min="0"
+                      disabled={isAutoSelectMode}
                     />
-                    <Button
-                      onClick={executeAutoSelect}
-                      disabled={!inputBudget || inputBudget <= 0}
-                      className="shrink-0"
-                    >
-                      확인
-                    </Button>
+                    {isAutoSelectMode ? (
+                      <Button
+                        onClick={cancelAutoSelect}
+                        variant="outline"
+                        className="shrink-0"
+                      >
+                        취소
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={executeAutoSelect}
+                        disabled={!inputBudget || inputBudget <= 0}
+                        className="shrink-0"
+                      >
+                        확인
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -1863,8 +2038,8 @@ const Payment = () => {
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                         <Gift className="w-5 h-5 text-primary" />
                       </div>
-                      <h2 className={`${isAutoSelectConfirmed ? "text-base" : "text-lg"} font-bold`}>
-                        {isAutoSelectConfirmed ? "기프티콘 자동선택" : "추천 기프티콘"}
+                      <h2 className={`${isAutoSelectMode ? "text-base" : "text-lg"} font-bold`}>
+                        {isAutoSelectMode ? "기프티콘 자동선택" : "추천 기프티콘"}
                       </h2>
                     </div>
                     <div className="text-sm text-muted-foreground">
@@ -1872,54 +2047,125 @@ const Payment = () => {
                     </div>
                   </div>
                 
-                {isLoading ? (
-                  <div className="text-center py-8 text-muted-foreground">로딩 중...</div>
-                ) : gifticons.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    등록된 기프티콘이 없습니다.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {gifticons.map((gifticon) => {
-                      const isSelected = selectedGifticons.has(gifticon.id);
-                      const discountAmount = gifticon.original_price - gifticon.sale_price;
-                      const discountPercent = Math.round((discountAmount / gifticon.original_price) * 100);
-                      
-                      return (
-                        <div
-                          key={gifticon.id}
-                          className={`p-4 rounded-xl transition-all cursor-pointer ${
-                            isSelected ? "bg-primary/10 border-2 border-primary" : "bg-muted/50 border border-transparent hover:border-border"
-                          }`}
-                          onClick={() => handleToggle(gifticon)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <p className="font-semibold">{gifticon.name || "기프티콘"}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-sm text-muted-foreground line-through">
-                                  {gifticon.original_price.toLocaleString()}원
-                                </span>
-                                <span className="text-sm font-bold text-primary">
-                                  {discountPercent}% ({discountAmount.toLocaleString()}원) 할인
-                                </span>
+                {isAutoSelectMode ? (
+                  // 자동선택 모드
+                  <>
+                    {isLoading ? (
+                      <div className="text-center py-8 text-muted-foreground">로딩 중...</div>
+                    ) : autoSelectGifticons.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        사용 가능한 기프티콘이 없습니다.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-3">
+                          {autoSelectGifticons.map((gifticon) => {
+                            const isSelected = selectedGifticons.has(gifticon.id);
+                            const discountAmount = gifticon.original_price - gifticon.sale_price;
+                            const discountPercent = Math.round((discountAmount / gifticon.original_price) * 100);
+                            
+                            return (
+                              <div
+                                key={gifticon.id}
+                                className={`p-4 rounded-xl transition-all cursor-pointer ${
+                                  isSelected ? "bg-primary/10 border-2 border-primary" : "bg-muted/50 border border-transparent hover:border-border"
+                                }`}
+                                onClick={() => handleToggle(gifticon)}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <p className="font-semibold">{gifticon.name || "기프티콘"}</p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="text-sm text-muted-foreground line-through">
+                                        {gifticon.original_price.toLocaleString()}원
+                                      </span>
+                                      <span className="text-sm font-bold text-primary">
+                                        {discountPercent}% ({discountAmount.toLocaleString()}원) 할인
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      판매가: {gifticon.sale_price.toLocaleString()}원
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center">
+                                    <Checkbox
+                                      checked={isSelected}
+                                      disabled={isLoading || (!isSelected && totalCost + gifticon.sale_price > userPoints)}
+                                      className="w-5 h-5"
+                                    />
+                                  </div>
+                                </div>
                               </div>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                판매가: {gifticon.sale_price.toLocaleString()}원
-                              </p>
-                            </div>
-                            <div className="flex items-center">
-                              <Checkbox
-                                checked={isSelected}
-                                disabled={isLoading || (!isSelected && totalCost + gifticon.sale_price > userPoints)}
-                                className="w-5 h-5"
-                              />
-                            </div>
-                          </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
+                        {inputBudget && inputBudget > 0 && (
+                          <div className="mt-4">
+                            <Button
+                              onClick={runAutoSelect}
+                              className="w-full"
+                              disabled={isLoading || autoSelectGifticons.length === 0}
+                            >
+                              자동 선택
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  // 추천 기프티콘 모드
+                  <>
+                    {isLoading ? (
+                      <div className="text-center py-8 text-muted-foreground">로딩 중...</div>
+                    ) : gifticons.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        등록된 기프티콘이 없습니다.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {gifticons.map((gifticon) => {
+                          const isSelected = selectedGifticons.has(gifticon.id);
+                          const discountAmount = gifticon.original_price - gifticon.sale_price;
+                          const discountPercent = Math.round((discountAmount / gifticon.original_price) * 100);
+                          
+                          return (
+                            <div
+                              key={gifticon.id}
+                              className={`p-4 rounded-xl transition-all cursor-pointer ${
+                                isSelected ? "bg-primary/10 border-2 border-primary" : "bg-muted/50 border border-transparent hover:border-border"
+                              }`}
+                              onClick={() => handleToggle(gifticon)}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <p className="font-semibold">{gifticon.name || "기프티콘"}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-sm text-muted-foreground line-through">
+                                      {gifticon.original_price.toLocaleString()}원
+                                    </span>
+                                    <span className="text-sm font-bold text-primary">
+                                      {discountPercent}% ({discountAmount.toLocaleString()}원) 할인
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    판매가: {gifticon.sale_price.toLocaleString()}원
+                                  </p>
+                                </div>
+                                <div className="flex items-center">
+                                  <Checkbox
+                                    checked={isSelected}
+                                    disabled={isLoading || (!isSelected && totalCost + gifticon.sale_price > userPoints)}
+                                    className="w-5 h-5"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {selectedGifticons.size > 0 && (
