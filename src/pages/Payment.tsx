@@ -69,6 +69,7 @@ const Payment = () => {
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState<boolean>(true);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [inputBudget, setInputBudget] = useState<number | null>(null); // 입력된 예산
+  const [isAutoSelectConfirmed, setIsAutoSelectConfirmed] = useState<boolean>(false); // 자동선택 확인 여부
 
   // 기프티콘 할인율 중 최대값 계산
   const maxGifticonDiscount = useMemo(() => {
@@ -809,10 +810,10 @@ const Payment = () => {
     return a.sale_price - b.sale_price;
   }, []);
 
-  // 가격 입력 시 자동선택 로직 (휴리스틱 알고리즘)
-  useEffect(() => {
+  // 자동선택 실행 함수 (확인 버튼 클릭 시 호출)
+  const executeAutoSelect = () => {
     if (!inputBudget || inputBudget <= 0 || !canUseGifticon || gifticons.length === 0) {
-      // 가격이 없거나 기프티콘을 사용할 수 없으면 자동선택 없음
+      toast.error("금액을 입력해주세요.");
       return;
     }
 
@@ -820,31 +821,34 @@ const Payment = () => {
     const sortedGifticons = [...gifticons].sort(sortByDiscountEfficiency);
 
     // 그리디 방식으로 예산 내에서 선택
+    // 중요: 총 기프티콘 금액권(original_price 합계)이 입력 금액을 넘지 않아야 함
     const selectedGifticonsMap = new Map<string, SelectedGifticon>();
-    let remainingBudget = Math.min(inputBudget, userPoints);
+    let remainingOriginalPriceBudget = inputBudget; // 총 기프티콘 금액권 예산
+    let totalSalePrice = 0; // 총 구매 포인트
 
     for (const gifticon of sortedGifticons) {
-      if (gifticon.sale_price <= remainingBudget) {
-        // 예산 내에서 구매 가능한 기프티콘 선택
-        const key = gifticon.sale_price.toString();
-        if (!selectedGifticonsMap.has(key)) {
-          selectedGifticonsMap.set(key, {
-            id: gifticon.id,
-            sale_price: gifticon.sale_price,
-            reservedId: gifticon.id // 일단 id 사용, 실제로는 handleToggle과 유사하게 처리 필요
-          });
-          remainingBudget -= gifticon.sale_price;
+      // original_price가 남은 예산을 넘지 않으면 선택 가능
+      if (gifticon.original_price <= remainingOriginalPriceBudget) {
+        // 구매 포인트도 확인 (포인트가 부족하면 선택 불가)
+        if (totalSalePrice + gifticon.sale_price <= userPoints) {
+          const key = gifticon.id;
+          if (!selectedGifticonsMap.has(key)) {
+            selectedGifticonsMap.set(key, {
+              id: gifticon.id,
+              sale_price: gifticon.sale_price,
+              reservedId: gifticon.id // 일단 id 사용, 실제로는 handleToggle과 유사하게 처리 필요
+            });
+            remainingOriginalPriceBudget -= gifticon.original_price;
+            totalSalePrice += gifticon.sale_price;
+          }
         }
       }
     }
 
-    // 자동선택 시 handleToggle을 통해 실제 DB 작업도 수행해야 함
-    // 하지만 useEffect 내에서 비동기 작업을 직접 호출하는 것은 복잡하므로
-    // 우선 selectedGifticons만 업데이트하고, 실제 DB 작업은 나중에 처리
-    // 또는 별도의 자동선택 함수를 만들어서 호출
-    // 일단 selectedGifticons만 업데이트하고 실제 DB 작업은 사용자가 확인 버튼을 누를 때 처리
     setSelectedGifticons(selectedGifticonsMap);
-  }, [inputBudget, gifticons, canUseGifticon, userPoints, sortByDiscountEfficiency]);
+    setIsAutoSelectConfirmed(true);
+    toast.success("기프티콘이 자동으로 선택되었습니다.");
+  };
 
   // 비슷한 가격대 기프티콘 추가 로드 (할인율 순)
   const loadSimilarPriceGifticons = async (selectedGifticon: UsedGifticon) => {
@@ -993,11 +997,11 @@ const Payment = () => {
 
   // 기프티콘 선택/해제 토글
   const handleToggle = async (gifticon: UsedGifticon) => {
-    const isSelected = selectedGifticons.has(gifticon.sale_price.toString());
+    const isSelected = selectedGifticons.has(gifticon.id);
 
     if (isSelected) {
       // 선택 해제
-      const currentSelected = selectedGifticons.get(gifticon.sale_price.toString());
+      const currentSelected = selectedGifticons.get(gifticon.id);
       if (!currentSelected) return;
 
       // 이미 결제 완료된 기프티콘인지 확인
@@ -1065,7 +1069,7 @@ const Payment = () => {
 
         // 선택 상태에서 제거
         const newMap = new Map(selectedGifticons);
-        newMap.delete(gifticon.sale_price.toString());
+        newMap.delete(gifticon.id);
         setSelectedGifticons(newMap);
         toast.success("선택이 취소되었습니다.");
         return;
@@ -1190,7 +1194,7 @@ const Payment = () => {
 
         // 선택 상태에서 제거
         const newMap = new Map(selectedGifticons);
-        newMap.delete(gifticon.sale_price.toString());
+        newMap.delete(gifticon.id);
         setSelectedGifticons(newMap);
 
         toast.success("선택이 취소되었습니다.");
@@ -1212,7 +1216,7 @@ const Payment = () => {
 
       // 데모 모드일 때는 간단한 처리
       if (!isLoggedIn) {
-        setSelectedGifticons(new Map(selectedGifticons).set(gifticon.sale_price.toString(), {
+        setSelectedGifticons(new Map(selectedGifticons).set(gifticon.id, {
           id: gifticon.id,
           sale_price: gifticon.sale_price,
           reservedId: gifticon.id
@@ -1269,7 +1273,7 @@ const Payment = () => {
         if (reserveError) throw reserveError;
 
         // 선택 상태 업데이트
-        setSelectedGifticons(new Map(selectedGifticons).set(gifticon.sale_price.toString(), {
+        setSelectedGifticons(new Map(selectedGifticons).set(gifticon.id, {
           id: gifticon.id,
           sale_price: gifticon.sale_price,
           reservedId: reservedId
@@ -1822,24 +1826,35 @@ const Payment = () => {
                 {/* 가격 입력창 */}
                 <div className="space-y-2 mb-4">
                   <label className="text-sm font-medium">결제할 금액 입력 (선택사항)</label>
-                  <Input
-                    type="number"
-                    placeholder="금액을 입력하세요 (원)"
-                    value={inputBudget ?? ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === "") {
-                        setInputBudget(null);
-                      } else {
-                        const numValue = parseInt(value, 10);
-                        if (!isNaN(numValue) && numValue > 0) {
-                          setInputBudget(numValue);
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      placeholder="금액을 입력하세요 (원)"
+                      value={inputBudget ?? ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === "") {
+                          setInputBudget(null);
+                          setIsAutoSelectConfirmed(false);
+                        } else {
+                          const numValue = parseInt(value, 10);
+                          if (!isNaN(numValue) && numValue > 0) {
+                            setInputBudget(numValue);
+                            setIsAutoSelectConfirmed(false);
+                          }
                         }
-                      }
-                    }}
-                    className="w-full"
-                    min="0"
-                  />
+                      }}
+                      className="flex-1"
+                      min="0"
+                    />
+                    <Button
+                      onClick={executeAutoSelect}
+                      disabled={!inputBudget || inputBudget <= 0}
+                      className="shrink-0"
+                    >
+                      확인
+                    </Button>
+                  </div>
                 </div>
 
                 <Card className="p-5 rounded-2xl border-border/50">
@@ -1848,8 +1863,8 @@ const Payment = () => {
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                         <Gift className="w-5 h-5 text-primary" />
                       </div>
-                      <h2 className="text-lg font-bold">
-                        {inputBudget ? "기프티콘 자동선택" : "추천 기프티콘"}
+                      <h2 className={`${isAutoSelectConfirmed ? "text-base" : "text-lg"} font-bold`}>
+                        {isAutoSelectConfirmed ? "기프티콘 자동선택" : "추천 기프티콘"}
                       </h2>
                     </div>
                     <div className="text-sm text-muted-foreground">
@@ -1866,7 +1881,7 @@ const Payment = () => {
                 ) : (
                   <div className="space-y-3">
                     {gifticons.map((gifticon) => {
-                      const isSelected = selectedGifticons.has(gifticon.sale_price.toString());
+                      const isSelected = selectedGifticons.has(gifticon.id);
                       const discountAmount = gifticon.original_price - gifticon.sale_price;
                       const discountPercent = Math.round((discountAmount / gifticon.original_price) * 100);
                       
