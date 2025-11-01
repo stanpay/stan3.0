@@ -1,18 +1,12 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Filter, ArrowUpDown, Plus } from "lucide-react";
+import { ChevronLeft, Filter, ArrowUpDown, Plus, Gift, ArrowLeft } from "lucide-react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import JsBarcode from "jsbarcode";
 
 interface Gifticon {
@@ -240,6 +234,11 @@ const MyGifticons = () => {
     setIsBarcodeDialogOpen(true);
   };
 
+  const handleCloseBarcode = () => {
+    setIsBarcodeDialogOpen(false);
+    setSelectedGifticon(null);
+  };
+
   const BarcodeDisplay = ({ number }: { number: string }) => {
     const svgRef = useRef<SVGSVGElement>(null);
 
@@ -339,6 +338,48 @@ const MyGifticons = () => {
     return (
       <div className="min-h-screen bg-background pb-20 flex items-center justify-center">
         <p className="text-muted-foreground">로딩 중...</p>
+      </div>
+    );
+  }
+
+  // 바코드 화면 표시
+  if (isBarcodeDialogOpen && selectedGifticon) {
+    return (
+      <div className="min-h-screen bg-background">
+        {/* Header with Back Button */}
+        <header className="sticky top-0 z-50 bg-card border-b border-border">
+          <div className="max-w-md mx-auto py-4 px-4 relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              onClick={handleCloseBarcode}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          </div>
+        </header>
+
+        {/* Barcode Card */}
+        <main className="max-w-md mx-auto px-4 py-6">
+          <Card className="p-4 rounded-2xl border-border/50">
+            <div className="space-y-3">
+              <BarcodeDisplay number={selectedGifticon.barcode || ""} />
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Gift className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">기프티콘</p>
+                  <p className="font-bold text-sm">{selectedGifticon.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedGifticon.originalPrice.toLocaleString()}원
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </main>
       </div>
     );
   }
@@ -520,27 +561,6 @@ const MyGifticons = () => {
           <Plus className="h-6 w-6 text-primary" />
         </Button>
       </Link>
-
-      {/* Barcode Dialog */}
-      <Dialog open={isBarcodeDialogOpen} onOpenChange={setIsBarcodeDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>기프티콘 바코드</DialogTitle>
-          </DialogHeader>
-          {selectedGifticon && selectedGifticon.barcode && (
-            <div className="space-y-4 py-4">
-              <div className="text-center space-y-2">
-                <p className="font-semibold text-lg">{selectedGifticon.brand}</p>
-                <p className="text-sm text-muted-foreground">{selectedGifticon.name}</p>
-              </div>
-              <BarcodeDisplay number={selectedGifticon.barcode} />
-              <p className="text-xs text-center text-muted-foreground">
-                유효기간: ~{selectedGifticon.expiryDate}
-              </p>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       <BottomNav />
     </div>

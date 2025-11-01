@@ -2467,9 +2467,9 @@ const Payment = () => {
               </div>
             </div>
 
-            <div className="flex flex-col h-full py-4 pb-20 overflow-hidden">
+            <div className="flex flex-col h-full py-4 overflow-hidden">
               <div 
-                className="flex-1 overflow-y-scroll snap-y snap-mandatory scrollbar-hide"
+                className="flex-1 overflow-y-auto snap-y snap-mandatory scrollbar-hide pb-32"
                 style={{
                   scrollSnapType: 'y mandatory',
                   scrollbarWidth: 'none',

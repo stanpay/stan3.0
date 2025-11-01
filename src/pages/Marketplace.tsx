@@ -58,7 +58,16 @@ const Marketplace = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background pb-20 w-full overflow-x-hidden">
+    <div className="min-h-screen bg-background pb-20 w-full overflow-x-hidden relative">
+      {/* 추후 서비스 예정 오버레이 */}
+      <div className="absolute inset-0 flex items-center justify-center z-50 bg-background/90">
+        <div className="bg-muted/90 px-6 py-3 rounded-lg border-2 border-muted-foreground/50">
+          <span className="text-base font-semibold text-muted-foreground">
+            추후 서비스 예정
+          </span>
+        </div>
+      </div>
+      
       {/* Top Banner */}
       <div className="bg-primary text-primary-foreground py-3 text-center font-semibold">
         타상품 교환불가 기프티콘
