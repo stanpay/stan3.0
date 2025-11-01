@@ -1455,8 +1455,40 @@ const Payment = () => {
   // Step 2에서 결제하기 버튼 클릭 시 네이버페이 앱 실행
   const handlePayWithNaverPay = () => {
     // 안드로이드 전용 - 네이버페이 앱 패키지명
-    if (window.location) {
-      window.location.href = "intent://launch#Intent;package=com.naverfin.payapp;end;";
+    // intent:// 형식으로 앱 실행 (fallback URL 없이 직접 실행)
+    const intentUrl = "intent://launch#Intent;package=com.naverfin.payapp;end;";
+    
+    try {
+      // iframe을 사용하여 인텐트 실행 시도 (더 안정적이고 플레이스토어로 가지 않음)
+      const iframe = document.createElement('iframe');
+      iframe.style.border = 'none';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.display = 'none';
+      iframe.src = intentUrl;
+      
+      // body에 추가하여 인텐트 실행
+      document.body.appendChild(iframe);
+      
+      // iframe을 즉시 제거하지 않고 잠시 유지 (인텐트 처리 시간 확보)
+      setTimeout(() => {
+        try {
+          if (iframe.parentNode) {
+            document.body.removeChild(iframe);
+          }
+        } catch (e) {
+          // iframe이 이미 제거된 경우 무시
+        }
+      }, 2000);
+      
+      // 추가로 window.location도 시도 (사용자 상호작용 이벤트 내에서)
+      setTimeout(() => {
+        window.location.href = intentUrl;
+      }, 100);
+    } catch (error) {
+      console.error("네이버페이 앱 실행 오류:", error);
+      // 오류 발생 시에도 인텐트 URL로 직접 이동 시도
+      window.location.href = intentUrl;
     }
   };
 
