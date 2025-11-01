@@ -4,9 +4,16 @@ import { ChevronLeft, Filter, ArrowUpDown, Plus } from "lucide-react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import BottomNav from "@/components/BottomNav";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import JsBarcode from "jsbarcode";
 
 interface Gifticon {
   id: string;
@@ -17,6 +24,7 @@ interface Gifticon {
   expiryDate: string;
   status: "사용가능" | "사용완료" | "판매완료";
   isSelling: boolean;
+  barcode?: string;
 }
 
 const MyGifticons = () => {
@@ -28,6 +36,8 @@ const MyGifticons = () => {
   const [gifticons, setGifticons] = useState<Gifticon[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [selectedGifticon, setSelectedGifticon] = useState<Gifticon | null>(null);
+  const [isBarcodeDialogOpen, setIsBarcodeDialogOpen] = useState(false);
 
   useEffect(() => {
     const filter = searchParams.get("filter") as "전체" | "사용가능" | "사용완료" | "판매완료" | null;
@@ -68,7 +78,8 @@ const MyGifticons = () => {
               day: '2-digit'
             }).replace(/\. /g, '.').replace(/\.$/, ''),
             status: g.status as "사용가능" | "사용완료" | "판매완료",
-            isSelling: g.is_selling || false
+            isSelling: g.is_selling || false,
+            barcode: (g as any).barcode || undefined
           }));
           setGifticons(formattedGifticons);
         }
@@ -85,6 +96,7 @@ const MyGifticons = () => {
             expiryDate: "2025.12.31",
             status: "사용가능",
             isSelling: false,
+            barcode: "1234567890123",
           },
           {
             id: "2",
@@ -95,6 +107,7 @@ const MyGifticons = () => {
             expiryDate: "2025.11.30",
             status: "사용가능",
             isSelling: false,
+            barcode: "2345678901234",
           },
           {
             id: "3",
@@ -105,6 +118,7 @@ const MyGifticons = () => {
             expiryDate: "2025.10.15",
             status: "사용가능",
             isSelling: false,
+            barcode: "3456789012345",
           },
           {
             id: "4",
@@ -115,6 +129,7 @@ const MyGifticons = () => {
             expiryDate: "2025.09.20",
             status: "사용완료",
             isSelling: false,
+            barcode: "4567890123456",
           },
           {
             id: "5",
@@ -125,6 +140,7 @@ const MyGifticons = () => {
             expiryDate: "2025.12.15",
             status: "사용가능",
             isSelling: false,
+            barcode: "5678901234567",
           },
           {
             id: "6",
@@ -135,6 +151,7 @@ const MyGifticons = () => {
             expiryDate: "2025.11.25",
             status: "사용가능",
             isSelling: false,
+            barcode: "6789012345678",
           },
         ];
         setGifticons(dummyGifticons);
@@ -208,6 +225,114 @@ const MyGifticons = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleGifticonClick = (gifticon: Gifticon) => {
+    if (!gifticon.barcode) {
+      toast({
+        title: "바코드 없음",
+        description: "이 기프티콘에는 바코드가 없습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setSelectedGifticon(gifticon);
+    setIsBarcodeDialogOpen(true);
+  };
+
+  const BarcodeDisplay = ({ number }: { number: string }) => {
+    const svgRef = useRef<SVGSVGElement>(null);
+
+    useEffect(() => {
+      if (svgRef.current && number) {
+        try {
+          // 숫자만 추출 (문자열이 있을 수 있음)
+          const barcodeNumber = number.replace(/\D/g, '');
+          
+          if (barcodeNumber.length === 0) {
+            return;
+          }
+
+          // EAN-13 형식인지 확인 (13자리)
+          if (barcodeNumber.length === 13) {
+            try {
+              JsBarcode(svgRef.current, barcodeNumber, {
+                format: "EAN13",
+                width: 2,
+                height: 80,
+                displayValue: false,
+                background: "transparent",
+                lineColor: "#000000",
+                margin: 0,
+              });
+            } catch (ean13Error) {
+              // EAN-13 체크섬 오류 시 CODE128로 대체
+              console.warn("EAN13 체크섬 오류, CODE128로 변경:", ean13Error);
+              JsBarcode(svgRef.current, barcodeNumber, {
+                format: "CODE128",
+                width: 2,
+                height: 80,
+                displayValue: false,
+                background: "transparent",
+                lineColor: "#000000",
+                margin: 0,
+              });
+            }
+          } else if (barcodeNumber.length === 8) {
+            // EAN-8 형식 (8자리)
+            try {
+              JsBarcode(svgRef.current, barcodeNumber, {
+                format: "EAN8",
+                width: 2,
+                height: 80,
+                displayValue: false,
+                background: "transparent",
+                lineColor: "#000000",
+                margin: 0,
+              });
+            } catch (ean8Error) {
+              // EAN-8 체크섬 오류 시 CODE128로 대체
+              console.warn("EAN8 체크섬 오류, CODE128로 변경:", ean8Error);
+              JsBarcode(svgRef.current, barcodeNumber, {
+                format: "CODE128",
+                width: 2,
+                height: 80,
+                displayValue: false,
+                background: "transparent",
+                lineColor: "#000000",
+                margin: 0,
+              });
+            }
+          } else {
+            // CODE128 형식 (다양한 길이 지원)
+            JsBarcode(svgRef.current, barcodeNumber, {
+              format: "CODE128",
+              width: 2,
+              height: 80,
+              displayValue: false,
+              background: "transparent",
+              lineColor: "#000000",
+              margin: 0,
+            });
+          }
+        } catch (error) {
+          console.error("바코드 생성 오류:", error);
+        }
+      }
+    }, [number]);
+
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center justify-center bg-white p-3 rounded-lg">
+          <svg
+            ref={svgRef}
+            className="max-w-full h-20"
+            style={{ maxHeight: '80px' }}
+          />
+        </div>
+        <p className="text-center font-mono text-xs tracking-widest">{number}</p>
+      </div>
+    );
   };
 
   if (loading) {
@@ -316,7 +441,8 @@ const MyGifticons = () => {
             filteredGifticons.map((gifticon) => (
               <Card
                 key={gifticon.id}
-                className="overflow-hidden hover:shadow-lg transition-shadow w-full"
+                className="overflow-hidden hover:shadow-lg transition-shadow w-full cursor-pointer"
+                onClick={() => handleGifticonClick(gifticon)}
               >
                 <div className="aspect-square bg-card flex items-center justify-center p-4 border-b border-border relative overflow-hidden">
                   <div className="text-7xl">{gifticon.image}</div>
@@ -355,7 +481,10 @@ const MyGifticons = () => {
                       variant={gifticon.isSelling ? "secondary" : "default"}
                       size="sm"
                       className="w-full mt-2"
-                      onClick={() => toggleSelling(gifticon.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelling(gifticon.id);
+                      }}
                       disabled={!isLoggedIn}
                     >
                       {gifticon.isSelling ? "판매중" : "판매하기"}
@@ -366,7 +495,10 @@ const MyGifticons = () => {
                       variant="outline"
                       size="sm"
                       className="w-full mt-2"
-                      onClick={() => restoreGifticon(gifticon.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        restoreGifticon(gifticon.id);
+                      }}
                       disabled={!isLoggedIn}
                     >
                       복구
@@ -388,6 +520,27 @@ const MyGifticons = () => {
           <Plus className="h-6 w-6 text-primary" />
         </Button>
       </Link>
+
+      {/* Barcode Dialog */}
+      <Dialog open={isBarcodeDialogOpen} onOpenChange={setIsBarcodeDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>기프티콘 바코드</DialogTitle>
+          </DialogHeader>
+          {selectedGifticon && selectedGifticon.barcode && (
+            <div className="space-y-4 py-4">
+              <div className="text-center space-y-2">
+                <p className="font-semibold text-lg">{selectedGifticon.brand}</p>
+                <p className="text-sm text-muted-foreground">{selectedGifticon.name}</p>
+              </div>
+              <BarcodeDisplay number={selectedGifticon.barcode} />
+              <p className="text-xs text-center text-muted-foreground">
+                유효기간: ~{selectedGifticon.expiryDate}
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <BottomNav />
     </div>
