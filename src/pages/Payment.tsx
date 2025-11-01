@@ -1371,8 +1371,26 @@ const Payment = () => {
         let gifticonsToRemove: string[] = [];
         
         if (currentIndex !== -1) {
+          // 자신보다 먼저 불러온 기프티콘 중 선택 해제된 것이 있는지 확인
+          let hasUnselectedEarlier = false;
+          for (let i = 0; i < currentIndex; i++) {
+            const earlierGifticon = samePriceRangeGifticons[i];
+            const isEarlierSelected = Array.from(selectedGifticons.values())
+              .some(selected => selected.id === earlierGifticon.id);
+            
+            if (!isEarlierSelected) {
+              // 자신보다 먼저 불러온 기프티콘 중 선택 해제된 것이 있음
+              hasUnselectedEarlier = true;
+              break;
+            }
+          }
+          
+          // 자신보다 먼저 불러온 기프티콘 중 선택 해제된 것이 있으면 자신도 화면에서 제거
+          if (hasUnselectedEarlier) {
+            gifticonsToRemove.push(gifticon.id);
+          }
+          
           // 자신 이후에 불러온 기프티콘 중 선택되지 않은 것들만 처리
-          // 자기 자신은 화면에서 제거하지 않음
           for (let i = currentIndex + 1; i < samePriceRangeGifticons.length; i++) {
             const laterGifticon = samePriceRangeGifticons[i];
             const isLaterSelected = Array.from(selectedGifticons.values())
@@ -1384,16 +1402,18 @@ const Payment = () => {
           }
         }
 
-        // 화면에서 제거 (자신 이후에 불러온 기프티콘만 제거)
+        // 화면에서 제거 (자신보다 먼저 불러온 기프티콘이 선택 해제되었으면 자신도 제거, 자신 이후에 불러온 기프티콘도 제거)
         setGifticons(prev => {
           const remaining = prev.filter(g => {
-            // 초기 로딩된 기프티콘은 항상 유지
+            // 초기 로딩된 기프티콘은 항상 유지 (단, 자신보다 먼저 불러온 기프티콘이 선택 해제되어 자신도 제거 대상인 경우 제거)
             if (initialGifticonIds.has(g.id)) {
+              // 자신보다 먼저 불러온 기프티콘이 선택 해제되어 자신도 제거 대상인 경우 제거
+              if (gifticonsToRemove.includes(g.id)) return false;
               return true;
             }
-            // 제거 대상 추가 기프티콘만 제거 (자기 자신은 포함하지 않음)
+            // 제거 대상 추가 기프티콘만 제거
             if (gifticonsToRemove.includes(g.id)) return false;
-            // 나머지는 모두 유지 (자기 자신 포함)
+            // 나머지는 모두 유지
             return true;
           });
 
@@ -1487,8 +1507,27 @@ const Payment = () => {
         const gifticonsToRelease: string[] = [];
         const gifticonsToRemove: string[] = [];
         
+        // 자신보다 먼저 불러온 기프티콘 중 선택 해제된 것이 있는지 확인
+        let hasUnselectedEarlier = false;
+        for (let i = 0; i < currentIndex; i++) {
+          const earlierGifticon = samePriceRangeGifticons[i];
+          const isEarlierSelected = Array.from(selectedGifticons.values())
+            .some(selected => selected.id === earlierGifticon.id);
+          
+          if (!isEarlierSelected) {
+            // 자신보다 먼저 불러온 기프티콘 중 선택 해제된 것이 있음
+            hasUnselectedEarlier = true;
+            break;
+          }
+        }
+        
+        // 자신보다 먼저 불러온 기프티콘 중 선택 해제된 것이 있으면 자신도 판매중으로 변경
+        if (hasUnselectedEarlier) {
+          gifticonsToRelease.push(currentSelected.reservedId);
+          gifticonsToRemove.push(gifticon.id);
+        }
+        
         // 자신 이후에 불러온 기프티콘 중 선택되지 않은 것들만 처리
-        // 자기 자신은 판매중으로 변경하지 않음
         for (let i = currentIndex + 1; i < samePriceRangeGifticons.length; i++) {
           const laterGifticon = samePriceRangeGifticons[i];
           const isLaterSelected = Array.from(selectedGifticons.values())
@@ -1515,16 +1554,18 @@ const Payment = () => {
           if (error) throw error;
         }
 
-        // 화면에서 제거 (자신 이후에 불러온 기프티콘만 제거)
+        // 화면에서 제거 (자신보다 먼저 불러온 기프티콘이 선택 해제되었으면 자신도 제거, 자신 이후에 불러온 기프티콘도 제거)
         setGifticons(prev => {
           const remaining = prev.filter(g => {
-            // 초기 로딩된 기프티콘은 항상 유지
+            // 초기 로딩된 기프티콘은 항상 유지 (단, 자신보다 먼저 불러온 기프티콘이 선택 해제되어 자신도 제거 대상인 경우 제거)
             if (initialGifticonIds.has(g.id)) {
+              // 자신보다 먼저 불러온 기프티콘이 선택 해제되어 자신도 제거 대상인 경우 제거
+              if (gifticonsToRemove.includes(g.id)) return false;
               return true;
             }
-            // 제거 대상 추가 기프티콘만 제거 (자기 자신은 포함하지 않음)
+            // 제거 대상 추가 기프티콘만 제거
             if (gifticonsToRemove.includes(g.id)) return false;
-            // 나머지는 모두 유지 (자기 자신 포함)
+            // 나머지는 모두 유지
             return true;
           });
 
