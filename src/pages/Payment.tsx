@@ -298,7 +298,12 @@ const Payment = () => {
     fetchFranchiseAndStoreInfo();
   }, [storeBrand, storeId]);
 
-  // 동적 결제 방식 생성 (프랜차이즈 결제 방식 + 기프티콘 조합)
+  // 기프티콘 사용 가능 여부 계산 (결제 방식 생성 및 useEffect에서 사용)
+  const isGifticonAvailable = storeInfo?.gifticon_available || false;
+  const hasGifticons = gifticons.length > 0;
+  const canUseGifticon = isGifticonAvailable && hasGifticons;
+
+  // 동적 결제 방식 생성 (프랜차이즈 결제 방식 + 기프티콘 분리)
   const paymentMethods = useMemo(() => {
     const methods: Array<{
       id: string;
@@ -311,68 +316,35 @@ const Payment = () => {
       description?: string;
     }> = [];
 
-    // 기프티콘 사용 가능 여부 및 최대 할인율
-    const isGifticonAvailable = storeInfo?.gifticon_available || false;
-    const hasGifticons = gifticons.length > 0;
-    const canUseGifticon = isGifticonAvailable && hasGifticons;
+    // 기프티콘 사용 가능 여부 및 최대 할인율 (이미 상단에서 계산됨)
 
-    // 프랜차이즈별 결제 방식과 기프티콘 조합
+    // 프랜차이즈별 결제 방식 추가 (기프티콘과 분리)
     if (franchisePaymentMethods.length > 0) {
       franchisePaymentMethods.forEach((method) => {
-        // 각 프랜차이즈 결제 방식에 기프티콘을 조합한 추천 방식 생성
-        if (canUseGifticon) {
-          // 조합된 추천 방식: 프랜차이즈 결제 방식 + 기프티콘
-          const combinedName = `${method.method_name} + 기프티콘`;
-          const combinedId = `method-combined-${method.method_name}-gifticon`;
-          
-          // 설명 생성
-          let description = "";
-          if (method.method_type === '적립' && method.rate) {
-            description = `${method.rate}% 적립 + 기프티콘 ${maxGifticonDiscount}% 할인`;
-          } else if (method.method_type === '스탬프') {
-            description = `스탬프 적립 + 기프티콘 ${maxGifticonDiscount}% 할인`;
-          } else if (method.method_type === '결제' && method.rate) {
-            description = `${method.rate}% 할인 + 기프티콘 ${maxGifticonDiscount}% 할인`;
-          } else {
-            description = `기프티콘 ${maxGifticonDiscount}% 할인`;
-          }
-
-          methods.push({
-            id: combinedId,
-            name: combinedName,
-            enabled: true,
-            type: 'combined',
-            method_type: method.method_type,
-            rate: method.rate,
-            gifticonDiscount: maxGifticonDiscount,
-            description: description,
-          });
-        } else {
-          // 기프티콘 없이 프랜차이즈 결제 방식만
-          let description = "";
-          if (method.method_type === '적립' && method.rate) {
-            description = `${method.rate}% 적립`;
-          } else if (method.method_type === '스탬프') {
-            description = "스탬프 적립";
-          } else if (method.method_type === '결제' && method.rate) {
-            description = `${method.rate}% 할인`;
-          }
-
-          methods.push({
-            id: `method-${method.method_name}`,
-            name: method.method_name,
-            enabled: true,
-            type: 'membership',
-            method_type: method.method_type,
-            rate: method.rate,
-            description: description,
-          });
+        // 프랜차이즈 결제 방식만 별도로 추가
+        let description = "";
+        if (method.method_type === '적립' && method.rate) {
+          description = `${method.rate}% 적립`;
+        } else if (method.method_type === '스탬프') {
+          description = "스탬프 적립";
+        } else if (method.method_type === '결제' && method.rate) {
+          description = `${method.rate}% 할인`;
         }
+
+        methods.push({
+          id: `method-${method.method_name}`,
+          name: method.method_name,
+          enabled: true,
+          type: 'membership',
+          method_type: method.method_type,
+          rate: method.rate,
+          description: description,
+        });
       });
     }
 
-    // 기프티콘만 사용하는 경우 (프랜차이즈 결제 방식이 없는 경우)
-    if (canUseGifticon && (franchisePaymentMethods.length === 0 || !franchisePaymentMethods.some(m => m.method_type))) {
+    // 기프티콘 결제 방식 추가 (항상 별도로 표시)
+    if (canUseGifticon) {
       methods.push({
         id: 'method-gifticon',
         name: '기프티콘',
@@ -541,6 +513,27 @@ const Payment = () => {
       }
     };
   }, [selectedGifticons, isLoggedIn]);
+
+  // 기프티콘 선택 시 결제방식에서도 자동으로 기프티콘 선택
+  useEffect(() => {
+    if (selectedGifticons.size > 0) {
+      // 기프티콘을 하나라도 선택하면 결제방식에서도 기프티콘 선택
+      setSelectedPaymentOptions(prev => {
+        const newSet = new Set(prev);
+        if (canUseGifticon && !newSet.has('method-gifticon')) {
+          newSet.add('method-gifticon');
+        }
+        return newSet;
+      });
+    } else {
+      // 기프티콘을 모두 해제하면 결제방식에서도 기프티콘 해제
+      setSelectedPaymentOptions(prev => {
+        const newSet = new Set(prev);
+        newSet.delete('method-gifticon');
+        return newSet;
+      });
+    }
+  }, [selectedGifticons.size, canUseGifticon]);
 
   // 기프티콘 개수 증가
   const handleIncrease = async (gifticon: UsedGifticon) => {
@@ -1128,8 +1121,7 @@ const Payment = () => {
             </div>
 
             {/* Gifticon Section */}
-            {(selectedPaymentOptions.has('method-gifticon') || 
-              Array.from(selectedPaymentOptions).some(id => id.startsWith('method-combined'))) && (
+            {canUseGifticon && (
               <Card className="p-5 rounded-2xl border-border/50">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
