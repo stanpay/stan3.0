@@ -1417,25 +1417,9 @@ const Payment = () => {
 
         if (isAddedGifticon) {
           // 추가로 불러온 기프티콘을 선택 해제하는 경우
-          // 원본 기프티콘이 선택되어 있는지 확인 (선택 해제 직전 상태 확인)
-          const parentGifticon = gifticons.find(g => g.id === parentId);
-          if (!parentGifticon) {
-            // 원본 기프티콘을 찾을 수 없으면 제거
-            gifticonsToRemove.push(gifticon.id);
-            gifticonIdsToRelease.push(currentSelected.reservedId);
-          } else {
-            // 원본 기프티콘이 선택되어 있는지 확인 (이번에 선택 해제하는 기프티콘 제외)
-            const parentReservedId = parentGifticon.id;
-            const isParentSelected = Array.from(selectedGifticons.values())
-              .some(selected => selected.reservedId === parentReservedId);
-
-            if (!isParentSelected) {
-              // 원본 기프티콘이 선택되지 않았으면 추가로 불러온 기프티콘을 화면에서 제거하고 판매중으로 복구
-              gifticonsToRemove.push(gifticon.id);
-              gifticonIdsToRelease.push(currentSelected.reservedId);
-            }
-            // 원본 기프티콘이 선택되어 있으면 추가로 불러온 기프티콘은 대기중 상태 유지 (화면에도 유지)
-          }
+          // 추가로 불러온 기프티콘을 선택 해제하면 항상 화면에서 제거하고 판매중으로 복구
+          gifticonsToRemove.push(gifticon.id);
+          gifticonIdsToRelease.push(currentSelected.reservedId);
         } else {
           // 원본 기프티콘을 선택 해제하는 경우
           // 추가로 불러온 기프티콘 찾기 (이 기프티콘을 원본으로 하는 추가 기프티콘들)
@@ -2215,7 +2199,7 @@ const Payment = () => {
                         <Gift className="w-5 h-5 text-primary" />
                       </div>
                       <h2 className="text-lg font-bold">
-                        추천 기프티콘
+                        {isAutoSelectMode ? "기프티콘 자동선택" : "추천 기프티콘"}
                       </h2>
                     </div>
                     <div className="text-sm text-muted-foreground">
