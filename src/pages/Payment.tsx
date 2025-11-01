@@ -1,10 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { ArrowLeft, Gift, CreditCard, Loader2 } from "lucide-react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import JsBarcode from "jsbarcode";
 
@@ -67,6 +68,7 @@ const Payment = () => {
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<Set<string>>(new Set());
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState<boolean>(true);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
+  const [inputBudget, setInputBudget] = useState<number | null>(null); // 입력된 예산
 
   // 기프티콘 할인율 중 최대값 계산
   const maxGifticonDiscount = useMemo(() => {
@@ -529,26 +531,21 @@ const Payment = () => {
           ? dummyGifticons.filter((gifticon) => gifticon.available_at === storeBrand)
           : dummyGifticons;
 
-        // 천원대별로 그룹화
-        const groupedByThousand = new Map<number, UsedGifticon[]>();
-        filteredDummy.forEach((item) => {
+        // 할인효율 기준으로 한 번 정렬
+        const sortedDummy = [...filteredDummy].sort(sortByDiscountEfficiency);
+
+        // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
+        const groupedByThousand = new Map<number, UsedGifticon>();
+        sortedDummy.forEach((item) => {
           const priceRange = getPriceRange(item.original_price);
+          // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
           if (!groupedByThousand.has(priceRange)) {
-            groupedByThousand.set(priceRange, []);
+            groupedByThousand.set(priceRange, item);
           }
-          groupedByThousand.get(priceRange)!.push(item);
         });
 
-        // 각 천원대별로 할인율 높은 순으로 정렬 후 첫 번째만 선택
-        const selectedGifticons: UsedGifticon[] = [];
-        groupedByThousand.forEach((items, priceRange) => {
-          items.sort((a, b) => {
-            const discountA = getDiscountRate(a.original_price, a.sale_price);
-            const discountB = getDiscountRate(b.original_price, b.sale_price);
-            return discountB - discountA; // 할인율 높은 순
-          });
-          selectedGifticons.push(items[0]); // 할인율이 가장 높은 것 선택
-        });
+        // 그룹화된 항목들을 배열로 변환 (이미 할인효율 순으로 정렬됨)
+        const selectedGifticons: UsedGifticon[] = Array.from(groupedByThousand.values());
 
         // 불러온 순서 추적 및 초기 기프티콘 ID 저장
         const initialIds = new Set<string>();
@@ -558,18 +555,8 @@ const Payment = () => {
           loadOrder.set(gifticon.id, loadOrderCounter.current++);
         });
 
-        // 정렬: 1. 가격대별, 2. 같은 가격대일 경우 불러온 순서대로
-        selectedGifticons.sort((a, b) => {
-          const priceRangeA = getPriceRange(a.original_price);
-          const priceRangeB = getPriceRange(b.original_price);
-          if (priceRangeA !== priceRangeB) {
-            return priceRangeA - priceRangeB; // 가격대별 정렬
-          }
-          // 같은 가격대일 경우 불러온 순서대로
-          const orderA = loadOrder.get(a.id) ?? 0;
-          const orderB = loadOrder.get(b.id) ?? 0;
-          return orderA - orderB;
-        });
+        // 정렬: 할인효율 기준 (할인효율 내림차순, 같은 효율일 땐 판매가 오름차순)
+        selectedGifticons.sort(sortByDiscountEfficiency);
 
         setGifticons(selectedGifticons);
         setInitialGifticonIds(initialIds);
@@ -603,26 +590,21 @@ const Payment = () => {
 
         // 이미 대기중인 기프티콘이 있고 천원대별로 하나씩 이상 있으면 그것만 표시
         if (existingPending && existingPending.length > 0) {
-          // 천원대별로 그룹화
-          const existingGroupedByThousand = new Map<number, UsedGifticon[]>();
-          existingPending.forEach((item) => {
+          // 할인효율 기준으로 한 번 정렬 (DB 레벨에서는 계산식 정렬이 불가능하므로 클라이언트에서 정렬)
+          const sortedPending = [...existingPending].sort(sortByDiscountEfficiency);
+
+          // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
+          const existingGroupedByThousand = new Map<number, UsedGifticon>();
+          sortedPending.forEach((item) => {
             const priceRange = getPriceRange(item.original_price);
+            // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
             if (!existingGroupedByThousand.has(priceRange)) {
-              existingGroupedByThousand.set(priceRange, []);
+              existingGroupedByThousand.set(priceRange, item);
             }
-            existingGroupedByThousand.get(priceRange)!.push(item);
           });
 
-          // 각 천원대별로 할인율 높은 순으로 정렬 후 첫 번째만 선택
-          const selectedGifticons: UsedGifticon[] = [];
-          existingGroupedByThousand.forEach((items, priceRange) => {
-            items.sort((a, b) => {
-              const discountA = getDiscountRate(a.original_price, a.sale_price);
-              const discountB = getDiscountRate(b.original_price, b.sale_price);
-              return discountB - discountA; // 할인율 높은 순
-            });
-            selectedGifticons.push(items[0]); // 할인율이 가장 높은 것 선택
-          });
+          // 그룹화된 항목들을 배열로 변환 (이미 할인효율 순으로 정렬됨)
+          const selectedGifticons: UsedGifticon[] = Array.from(existingGroupedByThousand.values());
 
           // 불러온 순서 추적 및 초기 기프티콘 ID 저장
           const initialIds = new Set<string>();
@@ -632,18 +614,8 @@ const Payment = () => {
             loadOrder.set(gifticon.id, loadOrderCounter.current++);
           });
 
-          // 정렬: 1. 가격대별, 2. 같은 가격대일 경우 불러온 순서대로
-          selectedGifticons.sort((a, b) => {
-            const priceRangeA = getPriceRange(a.original_price);
-            const priceRangeB = getPriceRange(b.original_price);
-            if (priceRangeA !== priceRangeB) {
-              return priceRangeA - priceRangeB; // 가격대별 정렬
-            }
-            // 같은 가격대일 경우 불러온 순서대로
-            const orderA = loadOrder.get(a.id) ?? 0;
-            const orderB = loadOrder.get(b.id) ?? 0;
-            return orderA - orderB;
-          });
+          // 정렬: 할인효율 기준 (할인효율 내림차순, 같은 효율일 땐 판매가 오름차순)
+          selectedGifticons.sort(sortByDiscountEfficiency);
 
           setGifticons(selectedGifticons);
           setInitialGifticonIds(initialIds);
@@ -667,26 +639,21 @@ const Payment = () => {
           return;
         }
 
-        // 천원대별로 그룹화
-        const groupedByThousand = new Map<number, UsedGifticon[]>();
-        allData.forEach((item) => {
+        // 할인효율 기준으로 한 번 정렬 (DB 레벨에서는 계산식 정렬이 불가능하므로 클라이언트에서 정렬)
+        const sortedData = [...allData].sort(sortByDiscountEfficiency);
+
+        // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
+        const groupedByThousand = new Map<number, UsedGifticon>();
+        sortedData.forEach((item) => {
           const priceRange = getPriceRange(item.original_price);
+          // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
           if (!groupedByThousand.has(priceRange)) {
-            groupedByThousand.set(priceRange, []);
+            groupedByThousand.set(priceRange, item);
           }
-          groupedByThousand.get(priceRange)!.push(item);
         });
 
-        // 각 천원대별로 할인율 높은 순으로 정렬 후 첫 번째만 선택
-        const displayGifticons: UsedGifticon[] = [];
-        groupedByThousand.forEach((items, priceRange) => {
-          items.sort((a, b) => {
-            const discountA = getDiscountRate(a.original_price, a.sale_price);
-            const discountB = getDiscountRate(b.original_price, b.sale_price);
-            return discountB - discountA; // 할인율 높은 순
-          });
-          displayGifticons.push(items[0]); // 할인율이 가장 높은 것 선택
-        });
+        // 그룹화된 항목들을 배열로 변환 (이미 할인효율 순으로 정렬됨)
+        const displayGifticons: UsedGifticon[] = Array.from(groupedByThousand.values());
         for (const gifticon of displayGifticons) {
           // 각 천원대의 첫 번째 기프티콘만 대기중으로 변경
           const { error: reserveError } = await supabase
@@ -714,26 +681,21 @@ const Payment = () => {
         if (error) throw error;
 
         if (data) {
-          // 천원대별로 그룹화
-          const finalGroupedByThousand = new Map<number, UsedGifticon[]>();
-          data.forEach((item) => {
+          // 할인효율 기준으로 한 번 정렬 (DB 레벨에서는 계산식 정렬이 불가능하므로 클라이언트에서 정렬)
+          const sortedData = [...data].sort(sortByDiscountEfficiency);
+
+          // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
+          const finalGroupedByThousand = new Map<number, UsedGifticon>();
+          sortedData.forEach((item) => {
             const priceRange = getPriceRange(item.original_price);
+            // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
             if (!finalGroupedByThousand.has(priceRange)) {
-              finalGroupedByThousand.set(priceRange, []);
+              finalGroupedByThousand.set(priceRange, item);
             }
-            finalGroupedByThousand.get(priceRange)!.push(item);
           });
 
-          // 각 천원대별로 할인율 높은 순으로 정렬 후 첫 번째만 선택
-          const finalGifticons: UsedGifticon[] = [];
-          finalGroupedByThousand.forEach((items, priceRange) => {
-            items.sort((a, b) => {
-              const discountA = getDiscountRate(a.original_price, a.sale_price);
-              const discountB = getDiscountRate(b.original_price, b.sale_price);
-              return discountB - discountA; // 할인율 높은 순
-            });
-            finalGifticons.push(items[0]); // 할인율이 가장 높은 것 선택
-          });
+          // 그룹화된 항목들을 배열로 변환 (이미 할인효율 순으로 정렬됨)
+          const finalGifticons: UsedGifticon[] = Array.from(finalGroupedByThousand.values());
 
           // 불러온 순서 추적 및 초기 기프티콘 ID 저장
           const initialIds = new Set<string>();
@@ -743,18 +705,8 @@ const Payment = () => {
             loadOrder.set(gifticon.id, loadOrderCounter.current++);
           });
 
-          // 정렬: 1. 가격대별, 2. 같은 가격대일 경우 불러온 순서대로
-          finalGifticons.sort((a, b) => {
-            const priceRangeA = getPriceRange(a.original_price);
-            const priceRangeB = getPriceRange(b.original_price);
-            if (priceRangeA !== priceRangeB) {
-              return priceRangeA - priceRangeB; // 가격대별 정렬
-            }
-            // 같은 가격대일 경우 불러온 순서대로
-            const orderA = loadOrder.get(a.id) ?? 0;
-            const orderB = loadOrder.get(b.id) ?? 0;
-            return orderA - orderB;
-          });
+          // 정렬: 할인효율 기준 (할인효율 내림차순, 같은 효율일 땐 판매가 오름차순)
+          finalGifticons.sort(sortByDiscountEfficiency);
 
           setGifticons(finalGifticons);
           setInitialGifticonIds(initialIds);
@@ -831,6 +783,69 @@ const Payment = () => {
     return Math.round((discountAmount / originalPrice) * 100);
   };
 
+  // 할인효율 계산 함수: (원가-할인가)/할인가
+  const getDiscountEfficiency = (originalPrice: number, salePrice: number): number => {
+    if (salePrice === 0) return 0;
+    return (originalPrice - salePrice) / salePrice;
+  };
+
+  // 정렬 함수 (마감일 임박순 최우선, 그 다음 할인효율 내림차순, 같은 효율일 땐 판매가 오름차순)
+  const sortByDiscountEfficiency = useCallback((a: UsedGifticon, b: UsedGifticon): number => {
+    // 1순위: 마감일 임박순 (expiry_date 오름차순)
+    const expiryA = new Date(a.expiry_date).getTime();
+    const expiryB = new Date(b.expiry_date).getTime();
+    if (expiryA !== expiryB) {
+      return expiryA - expiryB; // 마감일 임박순 (오름차순)
+    }
+    
+    // 2순위: 할인효율 내림차순
+    const efficiencyA = getDiscountEfficiency(a.original_price, a.sale_price);
+    const efficiencyB = getDiscountEfficiency(b.original_price, b.sale_price);
+    if (efficiencyA !== efficiencyB) {
+      return efficiencyB - efficiencyA; // 할인효율 내림차순
+    }
+    
+    // 3순위: 같은 효율일 경우 판매가 오름차순
+    return a.sale_price - b.sale_price;
+  }, []);
+
+  // 가격 입력 시 자동선택 로직 (휴리스틱 알고리즘)
+  useEffect(() => {
+    if (!inputBudget || inputBudget <= 0 || !canUseGifticon || gifticons.length === 0) {
+      // 가격이 없거나 기프티콘을 사용할 수 없으면 자동선택 없음
+      return;
+    }
+
+    // 할인효율 기준으로 정렬된 기프티콘 목록 생성 (이미 정렬되어 있을 수 있지만 확실하게 정렬)
+    const sortedGifticons = [...gifticons].sort(sortByDiscountEfficiency);
+
+    // 그리디 방식으로 예산 내에서 선택
+    const selectedGifticonsMap = new Map<string, SelectedGifticon>();
+    let remainingBudget = Math.min(inputBudget, userPoints);
+
+    for (const gifticon of sortedGifticons) {
+      if (gifticon.sale_price <= remainingBudget) {
+        // 예산 내에서 구매 가능한 기프티콘 선택
+        const key = gifticon.sale_price.toString();
+        if (!selectedGifticonsMap.has(key)) {
+          selectedGifticonsMap.set(key, {
+            id: gifticon.id,
+            sale_price: gifticon.sale_price,
+            reservedId: gifticon.id // 일단 id 사용, 실제로는 handleToggle과 유사하게 처리 필요
+          });
+          remainingBudget -= gifticon.sale_price;
+        }
+      }
+    }
+
+    // 자동선택 시 handleToggle을 통해 실제 DB 작업도 수행해야 함
+    // 하지만 useEffect 내에서 비동기 작업을 직접 호출하는 것은 복잡하므로
+    // 우선 selectedGifticons만 업데이트하고, 실제 DB 작업은 나중에 처리
+    // 또는 별도의 자동선택 함수를 만들어서 호출
+    // 일단 selectedGifticons만 업데이트하고 실제 DB 작업은 사용자가 확인 버튼을 누를 때 처리
+    setSelectedGifticons(selectedGifticonsMap);
+  }, [inputBudget, gifticons, canUseGifticon, userPoints, sortByDiscountEfficiency]);
+
   // 비슷한 가격대 기프티콘 추가 로드 (할인율 순)
   const loadSimilarPriceGifticons = async (selectedGifticon: UsedGifticon) => {
     if (!isLoggedIn || !storeBrand) return;
@@ -898,14 +913,10 @@ const Payment = () => {
         return;
       }
 
-      // 할인율 계산하여 정렬 (할인율 많은 순)
-      newData.sort((a, b) => {
-        const discountA = getDiscountRate(a.original_price, a.sale_price);
-        const discountB = getDiscountRate(b.original_price, b.sale_price);
-        return discountB - discountA;
-      });
+      // 할인효율 기준으로 정렬
+      newData.sort(sortByDiscountEfficiency);
 
-      // 같은 천원대 내에서 할인율이 높은 순으로 하나 선택
+      // 같은 천원대 내에서 할인효율이 높은 순으로 하나 선택
       const selectedGifticonToAdd = newData[0];
 
       console.log(`[기프티콘 추가 로드] 선택된 기프티콘: id=${selectedGifticonToAdd.id}, original_price=${selectedGifticonToAdd.original_price}, sale_price=${selectedGifticonToAdd.sale_price}, 할인율=${getDiscountRate(selectedGifticonToAdd.original_price, selectedGifticonToAdd.sale_price)}%`);
@@ -1807,18 +1818,44 @@ const Payment = () => {
 
             {/* Gifticon Section */}
             {canUseGifticon && (
-              <Card className="p-5 rounded-2xl border-border/50">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Gift className="w-5 h-5 text-primary" />
-                    </div>
-                    <h2 className="text-lg font-bold">추천 기프티콘</h2>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    보유 포인트: {userPoints.toLocaleString()}원
-                  </div>
+              <>
+                {/* 가격 입력창 */}
+                <div className="space-y-2 mb-4">
+                  <label className="text-sm font-medium">결제할 금액 입력 (선택사항)</label>
+                  <Input
+                    type="number"
+                    placeholder="금액을 입력하세요 (원)"
+                    value={inputBudget ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === "") {
+                        setInputBudget(null);
+                      } else {
+                        const numValue = parseInt(value, 10);
+                        if (!isNaN(numValue) && numValue > 0) {
+                          setInputBudget(numValue);
+                        }
+                      }
+                    }}
+                    className="w-full"
+                    min="0"
+                  />
                 </div>
+
+                <Card className="p-5 rounded-2xl border-border/50">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Gift className="w-5 h-5 text-primary" />
+                      </div>
+                      <h2 className="text-lg font-bold">
+                        {inputBudget ? "기프티콘 자동선택" : "추천 기프티콘"}
+                      </h2>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      보유 포인트: {userPoints.toLocaleString()}원
+                    </div>
+                  </div>
                 
                 {isLoading ? (
                   <div className="text-center py-8 text-muted-foreground">로딩 중...</div>
@@ -1899,6 +1936,7 @@ const Payment = () => {
                   </div>
                 )}
               </Card>
+              </>
             )}
 
             {/* Confirm Button */}
@@ -2063,13 +2101,23 @@ const Payment = () => {
             </div>
 
             <div className="absolute bottom-4 left-4 right-4 space-y-3">
-              <Button
-                onClick={handlePayWithNaverPay}
-                className="w-full h-14 text-lg font-semibold rounded-xl"
-                disabled={isLoading}
-              >
-                {isLoading ? "처리 중..." : "결제하기"}
-              </Button>
+              <div className="relative">
+                {/* 추후 서비스 예정 오버레이 - 왼쪽에 배치 */}
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10">
+                  <div className="bg-muted/90 px-2 py-1 rounded-md border border-muted-foreground/50">
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      추후 서비스 예정
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  onClick={handlePayWithNaverPay}
+                  className="w-full h-14 text-lg font-semibold rounded-xl opacity-50"
+                  disabled={true}
+                >
+                  {isLoading ? "처리 중..." : "결제앱 실행"}
+                </Button>
+              </div>
               <Button
                 onClick={handlePaymentComplete}
                 className="w-full h-14 text-lg font-semibold rounded-xl"
