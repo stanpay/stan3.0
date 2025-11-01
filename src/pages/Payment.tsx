@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Gift, CreditCard, Plus, Minus, Trash2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -26,7 +27,6 @@ interface SelectedGifticon {
 const Payment = () => {
   const { storeId } = useParams();
   const [step, setStep] = useState<1 | 2>(1);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("method2");
   const [gifticons, setGifticons] = useState<UsedGifticon[]>([]);
   const [selectedGifticons, setSelectedGifticons] = useState<Map<string, SelectedGifticon>>(new Map());
   const [userPoints, setUserPoints] = useState<number>(0);
@@ -36,6 +36,21 @@ const Payment = () => {
   const [recentlyPurchasedCount, setRecentlyPurchasedCount] = useState<number>(0);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [storeBrand, setStoreBrand] = useState<string>(""); // 매장 브랜드명 (스타벅스, 파스쿠찌 등)
+  const [franchiseId, setFranchiseId] = useState<string | null>(null);
+  const [franchisePaymentMethods, setFranchisePaymentMethods] = useState<Array<{
+    method_name: string;
+    method_type: string | null;
+    rate: number | null;
+  }>>([]);
+  const [storeInfo, setStoreInfo] = useState<{
+    gifticon_available: boolean;
+    local_currency_available: boolean;
+    local_currency_discount_rate: number | null;
+    parking_available: boolean;
+    free_parking: boolean;
+    parking_size: string | null;
+  } | null>(null);
+  const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<Set<string>>(new Set());
 
   // 기프티콘 할인율 중 최대값 계산
   const maxGifticonDiscount = useMemo(() => {
@@ -195,29 +210,210 @@ const Payment = () => {
     fetchStoreName();
   }, [storeId]);
 
-  const paymentMethods = [
-    { 
-      id: "method1", 
-      name: "기프티콘 + KT 멤버십 할인 + 해피포인트 적립", 
-      discount: "25%",
-      benefits: ["기프티콘 10% 할인", "KT 멤버십 10% 추가할인", "해피포인트 5% 적립"],
-      enabled: false
-    },
-    { 
-      id: "method2", 
-      name: "기프티콘 + 해피포인트 적립", 
-      discount: "15%",
-      benefits: ["기프티콘 10% 할인", "해피포인트 5% 적립"],
-      enabled: true
-    },
-    { 
-      id: "method3", 
-      name: "멤버십 할인", 
-      discount: "10%",
-      benefits: ["해피포인트 10% 할인"],
-      enabled: false
-    },
-  ];
+  // 프랜차이즈 및 매장 정보 조회
+  useEffect(() => {
+    const fetchFranchiseAndStoreInfo = async () => {
+      if (!storeBrand) return;
+
+      try {
+        // 1. 프랜차이즈 정보 조회
+        const { data: franchiseData, error: franchiseError } = await supabase
+          .from('franchises' as any)
+          .select('id')
+          .eq('name', storeBrand)
+          .single();
+
+        if (franchiseError && franchiseError.code !== 'PGRST116') {
+          console.error("프랜차이즈 조회 오류:", franchiseError);
+          return;
+        }
+
+        if (franchiseData) {
+          setFranchiseId(franchiseData.id);
+
+          // 2. 프랜차이즈별 결제 방식 조회 (method_name, method_type, rate 포함)
+          const { data: paymentMethodsData, error: paymentMethodsError } = await supabase
+            .from('franchise_payment_methods' as any)
+            .select('method_name, method_type, rate')
+            .eq('franchise_id', franchiseData.id);
+
+          if (paymentMethodsError) {
+            console.error("결제 방식 조회 오류:", paymentMethodsError);
+          } else if (paymentMethodsData) {
+            setFranchisePaymentMethods(paymentMethodsData.map((pm: any) => ({
+              method_name: pm.method_name,
+              method_type: pm.method_type,
+              rate: pm.rate,
+            })));
+          }
+        }
+
+        // 3. 매장 정보 조회 (storeId를 기반으로)
+        if (storeId) {
+          // storeId는 실제 매장 ID일 수도 있고, 브랜드명일 수도 있음
+          // 먼저 storeId로 직접 조회 시도
+          const { data: storeData, error: storeError } = await supabase
+            .from('stores' as any)
+            .select('gifticon_available, local_currency_available, local_currency_discount_rate, parking_available, free_parking, parking_size')
+            .eq('id', storeId)
+            .single();
+
+          if (storeError && storeError.code !== 'PGRST116') {
+            // storeId가 실제 ID가 아닌 경우, franchise_id와 매칭 시도
+            if (franchiseData) {
+              const { data: storeByNameData, error: storeByNameError } = await supabase
+                .from('stores' as any)
+                .select('gifticon_available, local_currency_available, local_currency_discount_rate, parking_available, free_parking, parking_size')
+                .eq('franchise_id', franchiseData.id)
+                .limit(1)
+                .single();
+
+              if (!storeByNameError && storeByNameData) {
+                setStoreInfo({
+                  gifticon_available: storeByNameData.gifticon_available || false,
+                  local_currency_available: storeByNameData.local_currency_available || false,
+                  local_currency_discount_rate: storeByNameData.local_currency_discount_rate || null,
+                  parking_available: storeByNameData.parking_available || false,
+                  free_parking: storeByNameData.free_parking || false,
+                  parking_size: storeByNameData.parking_size,
+                });
+              }
+            }
+          } else if (storeData) {
+            setStoreInfo({
+              gifticon_available: storeData.gifticon_available || false,
+              local_currency_available: storeData.local_currency_available || false,
+              local_currency_discount_rate: storeData.local_currency_discount_rate || null,
+              parking_available: storeData.parking_available || false,
+              free_parking: storeData.free_parking || false,
+              parking_size: storeData.parking_size,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("프랜차이즈/매장 정보 조회 오류:", error);
+      }
+    };
+
+    fetchFranchiseAndStoreInfo();
+  }, [storeBrand, storeId]);
+
+  // 동적 결제 방식 생성 (프랜차이즈 결제 방식 + 기프티콘 조합)
+  const paymentMethods = useMemo(() => {
+    const methods: Array<{
+      id: string;
+      name: string;
+      enabled: boolean;
+      type: 'membership' | 'gifticon' | 'local_currency' | 'combined';
+      method_type?: string | null;
+      rate?: number | null;
+      gifticonDiscount?: number;
+      description?: string;
+    }> = [];
+
+    // 기프티콘 사용 가능 여부 및 최대 할인율
+    const isGifticonAvailable = storeInfo?.gifticon_available || false;
+    const hasGifticons = gifticons.length > 0;
+    const canUseGifticon = isGifticonAvailable && hasGifticons;
+
+    // 프랜차이즈별 결제 방식과 기프티콘 조합
+    if (franchisePaymentMethods.length > 0) {
+      franchisePaymentMethods.forEach((method) => {
+        // 각 프랜차이즈 결제 방식에 기프티콘을 조합한 추천 방식 생성
+        if (canUseGifticon) {
+          // 조합된 추천 방식: 프랜차이즈 결제 방식 + 기프티콘
+          const combinedName = `${method.method_name} + 기프티콘`;
+          const combinedId = `method-combined-${method.method_name}-gifticon`;
+          
+          // 설명 생성
+          let description = "";
+          if (method.method_type === '적립' && method.rate) {
+            description = `${method.rate}% 적립 + 기프티콘 ${maxGifticonDiscount}% 할인`;
+          } else if (method.method_type === '스탬프') {
+            description = `스탬프 적립 + 기프티콘 ${maxGifticonDiscount}% 할인`;
+          } else if (method.method_type === '결제' && method.rate) {
+            description = `${method.rate}% 할인 + 기프티콘 ${maxGifticonDiscount}% 할인`;
+          } else {
+            description = `기프티콘 ${maxGifticonDiscount}% 할인`;
+          }
+
+          methods.push({
+            id: combinedId,
+            name: combinedName,
+            enabled: true,
+            type: 'combined',
+            method_type: method.method_type,
+            rate: method.rate,
+            gifticonDiscount: maxGifticonDiscount,
+            description: description,
+          });
+        } else {
+          // 기프티콘 없이 프랜차이즈 결제 방식만
+          let description = "";
+          if (method.method_type === '적립' && method.rate) {
+            description = `${method.rate}% 적립`;
+          } else if (method.method_type === '스탬프') {
+            description = "스탬프 적립";
+          } else if (method.method_type === '결제' && method.rate) {
+            description = `${method.rate}% 할인`;
+          }
+
+          methods.push({
+            id: `method-${method.method_name}`,
+            name: method.method_name,
+            enabled: true,
+            type: 'membership',
+            method_type: method.method_type,
+            rate: method.rate,
+            description: description,
+          });
+        }
+      });
+    }
+
+    // 기프티콘만 사용하는 경우 (프랜차이즈 결제 방식이 없는 경우)
+    if (canUseGifticon && (franchisePaymentMethods.length === 0 || !franchisePaymentMethods.some(m => m.method_type))) {
+      methods.push({
+        id: 'method-gifticon',
+        name: '기프티콘',
+        enabled: true,
+        type: 'gifticon',
+        gifticonDiscount: maxGifticonDiscount,
+        description: `기프티콘 ${maxGifticonDiscount}% 할인`,
+      });
+    }
+
+    // 지역화폐 사용 가능 여부에 따라 지역화폐 옵션 추가
+    if (storeInfo?.local_currency_available) {
+      const discountRate = storeInfo.local_currency_discount_rate;
+      const description = discountRate 
+        ? `지역화폐 ${discountRate}% 할인`
+        : "지역화폐 사용";
+      
+      methods.push({
+        id: 'method-local-currency',
+        name: '지역화폐',
+        enabled: true,
+        type: 'local_currency',
+        description: description,
+      });
+    }
+
+    // 기본값: 프랜차이즈 정보가 없는 경우 기존 방식 유지
+    if (methods.length === 0) {
+      return [
+        { 
+          id: "method2", 
+          name: "기프티콘 + 해피포인트 적립", 
+          enabled: true,
+          type: 'gifticon' as const,
+          description: canUseGifticon ? `기프티콘 ${maxGifticonDiscount}% 할인` : "적용",
+        },
+      ];
+    }
+
+    return methods;
+  }, [franchisePaymentMethods, storeInfo, gifticons, maxGifticonDiscount]);
 
 
   // 로그인 상태 확인
@@ -836,9 +1032,33 @@ const Payment = () => {
             <div className="space-y-3">
               <h2 className="text-lg font-bold mb-4">결제방식 추천</h2>
               {paymentMethods.map((method) => {
-                const isGifticonMethod = method.id === "method2";
+                const isSelected = selectedPaymentOptions.has(method.id);
                 const isEnabled = method.enabled || false;
-                const displayDiscount = isGifticonMethod ? gifticonMethodDiscount : method.discount;
+                const isGifticon = method.type === 'gifticon';
+                const isMembership = method.type === 'membership';
+                const isCombined = method.type === 'combined';
+                
+                // 할인율/적립률 표시 계산 (description 우선 사용)
+                let displayDiscount = method.description || "";
+                if (!displayDiscount) {
+                  if (isGifticon) {
+                    displayDiscount = method.gifticonDiscount ? `${method.gifticonDiscount}% 할인` : gifticonMethodDiscount;
+                  } else if (isMembership && method.method_type) {
+                    if (method.method_type === '적립' && method.rate) {
+                      displayDiscount = `${method.rate}% 적립`;
+                    } else if (method.method_type === '스탬프') {
+                      displayDiscount = "스탬프 적립";
+                    } else if (method.method_type === '결제' && method.rate) {
+                      displayDiscount = `${method.rate}% 할인`;
+                    } else {
+                      displayDiscount = "적용";
+                    }
+                  } else if (isCombined) {
+                    displayDiscount = method.description || "적용";
+                  } else {
+                    displayDiscount = "적용";
+                  }
+                }
                 
                 return (
                   <Card
@@ -846,13 +1066,19 @@ const Payment = () => {
                     className={`p-4 transition-all border-2 ${
                       !isEnabled
                         ? "bg-muted/30 border-muted opacity-60 cursor-not-allowed"
-                        : selectedPaymentMethod === method.id
+                        : isSelected
                         ? "border-primary bg-primary/5 cursor-pointer"
                         : "border-border/50 hover:border-border cursor-pointer"
                     }`}
                     onClick={() => {
                       if (isEnabled) {
-                        setSelectedPaymentMethod(method.id);
+                        const newSet = new Set(selectedPaymentOptions);
+                        if (isSelected) {
+                          newSet.delete(method.id);
+                        } else {
+                          newSet.add(method.id);
+                        }
+                        setSelectedPaymentOptions(newSet);
                       }
                     }}
                   >
@@ -866,36 +1092,31 @@ const Payment = () => {
                           </div>
                         </div>
                       )}
-                      <div className={`flex items-start justify-between mb-2 ${!isEnabled ? 'opacity-50' : ''}`}>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
+                      <div className={`flex items-start justify-between ${!isEnabled ? 'opacity-50' : ''}`}>
+                        <div className="flex items-center gap-3 flex-1">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => {
+                              if (!isEnabled) return;
+                              const newSet = new Set(selectedPaymentOptions);
+                              if (checked) {
+                                newSet.add(method.id);
+                              } else {
+                                newSet.delete(method.id);
+                              }
+                              setSelectedPaymentOptions(newSet);
+                            }}
+                            disabled={!isEnabled}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
                             <h3 className={`font-semibold text-sm ${!isEnabled ? 'text-muted-foreground' : ''}`}>
                               {method.name}
                             </h3>
-                          </div>
-                          <div className="space-y-1">
-                            {method.benefits.map((benefit, index) => (
-                              <p key={index} className={`text-xs ${!isEnabled ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
-                                • {benefit}
+                            {displayDiscount && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {displayDiscount}
                               </p>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="ml-3 flex flex-col items-end gap-2">
-                          <span className={`text-lg font-bold whitespace-nowrap ${!isEnabled ? 'text-muted-foreground' : 'text-primary'}`}>
-                            최대 {displayDiscount}
-                          </span>
-                          <div
-                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                              !isEnabled
-                                ? "border-muted-foreground/50 bg-muted/50"
-                                : selectedPaymentMethod === method.id
-                                ? "border-primary bg-primary"
-                                : "border-muted-foreground"
-                            }`}
-                          >
-                            {isEnabled && selectedPaymentMethod === method.id && (
-                              <div className="w-2.5 h-2.5 rounded-full bg-primary-foreground" />
                             )}
                           </div>
                         </div>
@@ -907,7 +1128,8 @@ const Payment = () => {
             </div>
 
             {/* Gifticon Section */}
-            {selectedPaymentMethod && (
+            {(selectedPaymentOptions.has('method-gifticon') || 
+              Array.from(selectedPaymentOptions).some(id => id.startsWith('method-combined'))) && (
               <Card className="p-5 rounded-2xl border-border/50">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">

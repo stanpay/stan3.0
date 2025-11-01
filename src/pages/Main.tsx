@@ -189,6 +189,9 @@ const Main = () => {
   };
 
   useEffect(() => {
+    // 이전 로그인 상태를 추적하기 위한 ref 사용
+    const prevSessionRef = { current: null as any };
+    
     const checkAuthAndInitLocation = async () => {
       console.log("🔐 [인증 확인] 시작");
       
@@ -256,6 +259,9 @@ const Main = () => {
       const loggedIn = !!session;
       setIsLoggedIn(loggedIn);
       console.log(`🔐 [인증 상태] ${loggedIn ? '로그인됨' : '로그인 안됨'}`);
+      
+      // 초기 세션 상태를 ref에 저장 (onAuthStateChange에서 사용)
+      prevSessionRef.current = session;
       
       if (!loggedIn) {
         // 로그인하지 않은 경우 더미 데이터 사용
@@ -361,6 +367,64 @@ const Main = () => {
     };
 
     checkAuthAndInitLocation();
+
+    // 세션 만료 감지 및 처리
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("🔐 [인증 상태 변경]", event, session ? "세션 있음" : "세션 없음");
+      
+      const wasLoggedIn = !!prevSessionRef.current;
+      const isNowLoggedIn = !!session;
+      
+      if (event === "SIGNED_OUT" || (!session && wasLoggedIn)) {
+        // 세션이 만료되거나 로그아웃된 경우
+        console.log("⚠️ [세션 만료] 로그인이 만료되었습니다");
+        setIsLoggedIn(false);
+        
+        // 로그인 상태였다가 만료된 경우에만 알림 표시 후 로그인 페이지로 이동
+        if (wasLoggedIn) {
+          toast({
+            title: "로그인 만료",
+            description: "세션이 만료되었습니다. 다시 로그인해주세요.",
+            variant: "destructive",
+          });
+          
+          // 로그인 페이지로 리다이렉트
+          navigate("/");
+        }
+      } else if (event === "SIGNED_IN" || (session && isNowLoggedIn)) {
+        // 로그인되거나 토큰이 갱신된 경우
+        console.log("✅ [세션 유지/갱신] 로그인 상태 유지");
+        setIsLoggedIn(true);
+        
+        // 처음 로그인한 경우에만 위치 정보 다시 가져오기 (TOKEN_REFRESHED는 제외)
+        if (event === "SIGNED_IN" && session && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              const { latitude, longitude } = position.coords;
+              const address = await getAddressFromCoords(latitude, longitude);
+              localStorage.setItem("selectedLocation", address);
+              localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+              setCurrentLocation(address);
+              setCurrentCoords({ latitude, longitude });
+              await fetchNearbyStores(latitude, longitude);
+            },
+            (error) => {
+              const defaultLocation = "강남구 역삼동";
+              setCurrentLocation(defaultLocation);
+              localStorage.setItem("selectedLocation", defaultLocation);
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+          );
+        }
+      }
+      
+      // 현재 세션 상태 저장
+      prevSessionRef.current = session;
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [toast, navigate]);
 
   const handleRefreshLocation = async () => {
