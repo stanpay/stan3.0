@@ -45,6 +45,9 @@ const Payment = () => {
     method_type: string | null;
     rate: number | null;
   }>>([]);
+  // 결제 완료된 기프티콘 추적 (뒤로가기 방지용)
+  const [completedPurchases, setCompletedPurchases] = useState<Set<string>>(new Set());
+  
   const [storeInfo, setStoreInfo] = useState<{
     gifticon_available: boolean;
     local_currency_available: boolean;
@@ -654,7 +657,7 @@ const Payment = () => {
 
       releaseAllReservedGifticons();
     };
-  }, [selectedGifticons, isLoggedIn, storeBrand]);
+  }, [isLoggedIn, storeBrand]);
 
   // 기프티콘 선택 시 결제방식에서도 자동으로 기프티콘 선택
   useEffect(() => {
@@ -679,6 +682,13 @@ const Payment = () => {
 
   // 기프티콘 개수 증가
   const handleIncrease = async (gifticon: UsedGifticon) => {
+    // 이미 결제 완료된 기프티콘인지 확인
+    const existingSelection = selectedGifticons.get(gifticon.sale_price.toString());
+    if (existingSelection && existingSelection.reservedIds.some(id => completedPurchases.has(id))) {
+      toast.error("이미 결제 완료된 기프티콘이 포함되어 있습니다.");
+      return;
+    }
+    
     // 데모 모드일 때는 간단한 처리
     if (!isLoggedIn) {
       const currentSelected = selectedGifticons.get(gifticon.sale_price.toString()) || {
@@ -818,6 +828,12 @@ const Payment = () => {
     const currentSelected = selectedGifticons.get(gifticon.sale_price.toString());
     if (!currentSelected || currentSelected.count <= 0) return;
 
+    // 이미 결제 완료된 기프티콘인지 확인
+    if (currentSelected.reservedIds.some(id => completedPurchases.has(id))) {
+      toast.error("이미 결제 완료된 기프티콘은 환불할 수 없습니다.");
+      return;
+    }
+
     // 데모 모드일 때는 간단한 처리
     if (!isLoggedIn) {
       const newCount = currentSelected.count - 1;
@@ -891,6 +907,12 @@ const Payment = () => {
   const handleRemoveAll = async (gifticon: UsedGifticon) => {
     const currentSelected = selectedGifticons.get(gifticon.sale_price.toString());
     if (!currentSelected || currentSelected.count === 0) return;
+
+    // 이미 결제 완료된 기프티콘인지 확인
+    if (currentSelected.reservedIds.some(id => completedPurchases.has(id))) {
+      toast.error("이미 결제 완료된 기프티콘은 환불할 수 없습니다.");
+      return;
+    }
 
     // 데모 모드일 때는 간단한 처리
     if (!isLoggedIn) {
@@ -995,6 +1017,13 @@ const Payment = () => {
         }
       }
 
+      // 이미 결제 완료된 기프티콘이 포함되어 있는지 확인
+      if (allReservedIds.some(id => completedPurchases.has(id))) {
+        toast.error("이미 결제 완료된 기프티콘이 포함되어 있습니다.");
+        setIsLoading(false);
+        return;
+      }
+
       // used_gifticons에서 상세 정보 조회
       const { data: usedGifticonsData, error: fetchError } = await supabase
         .from('used_gifticons')
@@ -1008,12 +1037,17 @@ const Payment = () => {
       const typedGifticonsData = usedGifticonsData as UsedGifticonWithName[];
 
       // 판매완료로 상태 변경
+      console.log("판매완료 변경 시도:", allReservedIds);
       const { error: updateError } = await supabase
         .from('used_gifticons')
         .update({ status: '판매완료' })
         .in('id', allReservedIds);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error("판매완료 변경 오류:", updateError);
+        throw updateError;
+      }
+      console.log("판매완료 변경 성공");
 
       // gifticons 테이블에 구매한 기프티콘 추가
       if (typedGifticonsData && typedGifticonsData.length > 0) {
@@ -1049,8 +1083,10 @@ const Payment = () => {
       setUserPoints(userPoints - totalCost);
       toast.success("결제가 완료되었습니다!");
       
-      // 선택 상태 초기화
-      setSelectedGifticons(new Map());
+      // 결제 완료된 기프티콘 ID 저장
+      setCompletedPurchases(new Set(allReservedIds));
+      
+      // 선택 상태는 유지 (뒤로가기 방지용)
       setStep(2);
     } catch (error: any) {
       console.error("결제 오류:", error);
@@ -1061,8 +1097,8 @@ const Payment = () => {
   };
 
   const handleConfirmStep1 = () => {
-    setStep(2);
-    setCurrentCardIndex(0);
+    // 결제 처리
+    handlePayment();
   };
 
   // 2단계에서 보여줄 총 카드 수 (기프티콘 + 멤버십)
@@ -1662,14 +1698,27 @@ const Payment = () => {
               </div>
             </div>
 
-            <div className="absolute bottom-4 left-4 right-4">
-              <Button
-                onClick={handlePayment}
-                className="w-full h-14 text-lg font-semibold rounded-xl"
-                disabled={isLoading}
-              >
-                {isLoading ? "처리 중..." : "결제수단 선택"}
-              </Button>
+            <div className="absolute bottom-4 left-4 right-4 space-y-3">
+              {completedPurchases.size > 0 ? (
+                <Button
+                  onClick={() => {
+                    setSelectedGifticons(new Map());
+                    setCompletedPurchases(new Set());
+                    navigate('/main');
+                  }}
+                  className="w-full h-14 text-lg font-semibold rounded-xl"
+                >
+                  결제 완료
+                </Button>
+              ) : (
+                <Button
+                  onClick={handlePayment}
+                  className="w-full h-14 text-lg font-semibold rounded-xl"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "처리 중..." : "결제수단 선택"}
+                </Button>
+              )}
             </div>
           </>
         )}
