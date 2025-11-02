@@ -703,7 +703,8 @@ const Payment = () => {
               reserved_by: session.user.id,
               reserved_at: new Date().toISOString()
             })
-            .eq('id', gifticon.id);
+            .eq('id', gifticon.id)
+            .eq('status', '판매중'); // 판매중인 것만 대기중으로 변경
 
           if (reserveError) {
             console.error("기프티콘 예약 오류:", reserveError);
@@ -1194,7 +1195,8 @@ const Payment = () => {
             reserved_by: session.user.id,
             reserved_at: new Date().toISOString()
           })
-          .eq('id', gifticon.id);
+          .eq('id', gifticon.id)
+          .eq('status', '판매중'); // 판매중인 것만 대기중으로 변경
 
         if (reserveError) {
           console.error("기프티콘 예약 오류:", reserveError);
