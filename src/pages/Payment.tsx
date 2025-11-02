@@ -794,6 +794,35 @@ const Payment = () => {
     };
   }, [isLoggedIn, storeBrand]);
 
+  // Step1에서 1분 이상 머무르면 main으로 이동하고 대기중 기프티콘 복구
+  useEffect(() => {
+    if (step !== 1 || !isLoggedIn || !storeBrand) return;
+
+    const timeoutId = setTimeout(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      // 대기중 기프티콘을 판매중으로 복구
+      await supabase
+        .from('used_gifticons')
+        .update({ 
+          status: '판매중',
+          reserved_by: null,
+          reserved_at: null
+        })
+        .eq('available_at', storeBrand)
+        .eq('status', '대기중')
+        .eq('reserved_by', session.user.id);
+
+      // main으로 이동
+      navigate('/main');
+    }, 60000); // 1분 = 60초
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [step, isLoggedIn, storeBrand, navigate]);
+
   // 기프티콘 선택 시 결제방식에서도 자동으로 기프티콘 선택
   useEffect(() => {
     if (selectedGifticons.size > 0) {
