@@ -58,8 +58,16 @@ const Main = () => {
       const geocoder = new kakao.maps.services.Geocoder();
       
       return new Promise<string>((resolve) => {
+        // 10초 타임아웃 설정
+        const timeoutId = setTimeout(() => {
+          console.error("⏱️ [주소 변환] Timeout - Geocoder 응답이 10초 내에 오지 않음");
+          resolve("위치를 확인할 수 없음");
+        }, 10000);
+        
         const coord = new kakao.maps.LatLng(latitude, longitude);
         const callback = (result: any, status: any) => {
+          clearTimeout(timeoutId); // 타임아웃 해제
+          
           if (status === kakao.maps.services.Status.OK) {
             console.log("✅ [주소 변환] Kakao Geocoder 응답:", result);
             
@@ -124,7 +132,13 @@ const Main = () => {
           resolve("위치를 확인할 수 없음");
         };
         
-        geocoder.coord2Address(coord.getLng(), coord.getLat(), callback);
+        try {
+          geocoder.coord2Address(coord.getLng(), coord.getLat(), callback);
+        } catch (error) {
+          clearTimeout(timeoutId);
+          console.error("❌ [주소 변환] coord2Address 호출 실패:", error);
+          resolve("위치를 확인할 수 없음");
+        }
       });
     } catch (error) {
       console.error("❌ [주소 변환] 실패:", error);
@@ -247,24 +261,32 @@ const Main = () => {
         console.log("🌍 [위치 정보] 브라우저 위치 정보 요청 시작");
         navigator.geolocation.getCurrentPosition(
           async (position) => {
-            const { latitude, longitude } = position.coords;
-            console.log("✅ [위치 정보] 좌표 획득 성공:", { latitude, longitude });
-            
-            // 좌표를 주소로 변환
-            console.log("🏠 [주소 변환] 시작");
-            const address = await getAddressFromCoords(latitude, longitude);
-            console.log("✅ [주소 변환] 완료:", address);
-            
-            // 저장 및 표시
-            localStorage.setItem("selectedLocation", address);
-            localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-            setCurrentLocation(address);
-            setCurrentCoords({ latitude, longitude });
-            setIsLoadingLocation(false);
-            
-            // 매장 정보 가져오기
-            console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
-            await fetchNearbyStores(latitude, longitude);
+            try {
+              const { latitude, longitude } = position.coords;
+              console.log("✅ [위치 정보] 좌표 획득 성공:", { latitude, longitude });
+              
+              // 좌표를 주소로 변환
+              console.log("🏠 [주소 변환] 시작");
+              const address = await getAddressFromCoords(latitude, longitude);
+              console.log("✅ [주소 변환] 완료:", address);
+              
+              // 저장 및 표시
+              localStorage.setItem("selectedLocation", address);
+              localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+              setCurrentLocation(address);
+              setCurrentCoords({ latitude, longitude });
+              setIsLoadingLocation(false);
+              
+              // 매장 정보 가져오기
+              console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
+              await fetchNearbyStores(latitude, longitude);
+            } catch (error) {
+              console.error("❌ [위치 초기화] 주소 변환 중 오류:", error);
+              const defaultLocation = "강남구 역삼동";
+              setCurrentLocation(defaultLocation);
+              localStorage.setItem("selectedLocation", defaultLocation);
+              setIsLoadingLocation(false);
+            }
           },
           (error) => {
             console.error("❌ [위치 정보] 획득 실패:", error);
@@ -394,21 +416,35 @@ const Main = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
-          const { latitude, longitude } = position.coords;
-          const address = await getAddressFromCoords(latitude, longitude);
-          
-          localStorage.setItem("selectedLocation", address);
-          localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-          setCurrentLocation(address);
-          setCurrentCoords({ latitude, longitude });
-          setIsLoadingLocation(false);
-          
-          await fetchNearbyStores(latitude, longitude);
-          
-          toast({
-            title: "위치 업데이트 완료",
-            description: "현재 위치가 업데이트되었습니다.",
-          });
+          try {
+            const { latitude, longitude } = position.coords;
+            const address = await getAddressFromCoords(latitude, longitude);
+            
+            localStorage.setItem("selectedLocation", address);
+            localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+            setCurrentLocation(address);
+            setCurrentCoords({ latitude, longitude });
+            setIsLoadingLocation(false);
+            
+            await fetchNearbyStores(latitude, longitude);
+            
+            toast({
+              title: "위치 업데이트 완료",
+              description: "현재 위치가 업데이트되었습니다.",
+            });
+          } catch (error) {
+            console.error("❌ [위치 새로고침] 주소 변환 중 오류:", error);
+            const defaultLocation = "강남구 역삼동";
+            setCurrentLocation(defaultLocation);
+            localStorage.setItem("selectedLocation", defaultLocation);
+            setIsLoadingLocation(false);
+            
+            toast({
+              title: "위치 업데이트 실패",
+              description: "주소 변환에 실패했습니다. 기본 위치로 설정됩니다.",
+              variant: "destructive",
+            });
+          }
         },
         (error) => {
           console.error("위치 가져오기 실패:", error);
