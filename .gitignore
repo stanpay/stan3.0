@@ -34,5 +34,3 @@ supabase/migrations/
 supabase/functions/
 supabase/config.toml
 supabase/templates/
-
-# Development tools (배포에 필요 없음)
