@@ -1,9 +1,11 @@
 import { Plus, Filter, ArrowUpDown } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import BottomNav from "@/components/BottomNav";
+import { useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Product {
   id: number;
@@ -17,6 +19,17 @@ interface Product {
 }
 
 const Marketplace = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate("/");
+      }
+    };
+    checkAuth();
+  }, [navigate]);
   const products: Product[] = [
     {
       id: 1,

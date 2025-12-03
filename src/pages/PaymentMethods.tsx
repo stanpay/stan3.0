@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { ChevronLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +21,8 @@ const PaymentMethods = () => {
     kbpay: false,
     shinhan: false,
   });
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     const checkUserAndLoadSettings = async () => {
@@ -49,13 +51,16 @@ const PaymentMethods = () => {
         }
       } else {
         setIsLoggedIn(false);
+        // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
+        navigate("/");
+        return;
       }
       
       setLoading(false);
     };
 
     checkUserAndLoadSettings();
-  }, []);
+  }, [navigate]);
 
   const handleToggle = async (method: keyof typeof paymentMethods) => {
     if (!isLoggedIn) {

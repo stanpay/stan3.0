@@ -59,77 +59,9 @@ const History = () => {
         }
       } else {
         setIsLoggedIn(false);
-        // Show dummy data for non-logged in users
-        const today = format(new Date(), "yyyy.MM.dd");
-        const yesterday = format(new Date(Date.now() - 86400000), "yyyy.MM.dd");
-        const twoDaysAgo = format(new Date(Date.now() - 172800000), "yyyy.MM.dd");
-
-        const dummyPayments: Payment[] = [
-          {
-            id: "1",
-            store: "스타벅스 강남점",
-            date: today,
-            time: "14:30",
-            amount: 4500,
-            method: "카카오페이",
-            status: "완료",
-          },
-          {
-            id: "2",
-            store: "CU 역삼점",
-            date: today,
-            time: "10:20",
-            amount: 5000,
-            method: "네이버페이",
-            status: "완료",
-          },
-          {
-            id: "3",
-            store: "맥도날드 신사점",
-            date: yesterday,
-            time: "12:15",
-            amount: 6500,
-            method: "토스페이",
-            status: "완료",
-          },
-          {
-            id: "4",
-            store: "GS25 서초점",
-            date: yesterday,
-            time: "09:45",
-            amount: 3000,
-            method: "삼성페이",
-            status: "완료",
-          },
-          {
-            id: "5",
-            store: "스타벅스 서초점",
-            date: twoDaysAgo,
-            time: "16:30",
-            amount: 4500,
-            method: "카카오페이",
-            status: "취소",
-          },
-          {
-            id: "6",
-            store: "투썸플레이스 역삼점",
-            date: twoDaysAgo,
-            time: "15:00",
-            amount: 5500,
-            method: "토스페이",
-            status: "완료",
-          },
-          {
-            id: "7",
-            store: "이디야커피 강남점",
-            date: twoDaysAgo,
-            time: "11:20",
-            amount: 3500,
-            method: "카카오페이",
-            status: "완료",
-          },
-        ];
-        setPayments(dummyPayments);
+        // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
+        navigate("/");
+        return;
       }
       
       setLoading(false);

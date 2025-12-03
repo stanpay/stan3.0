@@ -40,127 +40,6 @@ const Main = () => {
   const [isLoadingMoreStores, setIsLoadingMoreStores] = useState(false);
   const [currentCoords, setCurrentCoords] = useState<{latitude: number, longitude: number} | null>(null);
 
-  // 더미 기프티콘 데이터 (브랜드별)
-  const dummyGifticonsByBrand: Record<string, Array<{ original_price: number; sale_price: number }>> = {
-    starbucks: [
-      { original_price: 4500, sale_price: 3600 }, // 20% 할인
-      { original_price: 5000, sale_price: 4250 }, // 15% 할인
-    ],
-    baskin: [
-      { original_price: 3500, sale_price: 2800 }, // 20% 할인
-      { original_price: 4000, sale_price: 3400 }, // 15% 할인
-    ],
-    mega: [
-      { original_price: 3000, sale_price: 2400 }, // 20% 할인
-      { original_price: 3500, sale_price: 2975 }, // 15% 할인
-    ],
-    pascucci: [
-      { original_price: 5000, sale_price: 4000 }, // 20% 할인
-      { original_price: 5500, sale_price: 4675 }, // 15% 할인
-    ],
-    twosome: [
-      { original_price: 4000, sale_price: 3200 }, // 20% 할인
-      { original_price: 4500, sale_price: 3825 }, // 15% 할인
-    ],
-  };
-
-  // 더미 데이터에서 할인율 계산 함수
-  const calculateDummyDiscount = (store: StoreData): { maxDiscount: string | null; discountNum: number; maxDiscountPercent: number | null } => {
-    // 파스쿠찌가 아닌 경우 할인율 표시하지 않음
-    if (store.image !== 'pascucci') {
-      return {
-        maxDiscount: null,
-        discountNum: 0,
-        maxDiscountPercent: null,
-      };
-    }
-
-    // 파스쿠찌만 할인율 계산
-    // 지역화폐 할인율 (더미 데이터용)
-    const localCurrencyDiscount = 13; // 파스쿠찌 삼성점은 13% 지역화폐 할인
-
-    // 기프티콘 할인율 계산
-    let maxGifticonDiscount = 0;
-    const gifticons = dummyGifticonsByBrand[store.image] || [];
-    if (gifticons.length > 0) {
-      const discounts = gifticons.map(g => {
-        const discountAmount = g.original_price - g.sale_price;
-        return Math.round((discountAmount / g.original_price) * 100);
-      });
-      maxGifticonDiscount = Math.max(...discounts);
-    }
-
-    // 최대 할인율 계산
-    const maxDiscountPercent = Math.max(localCurrencyDiscount, maxGifticonDiscount);
-
-    return {
-      maxDiscount: maxDiscountPercent > 0 ? `최대 ${maxDiscountPercent}% 할인` : null,
-      discountNum: maxDiscountPercent,
-      maxDiscountPercent: maxDiscountPercent > 0 ? maxDiscountPercent : null,
-    };
-  };
-
-  // 더미 데이터
-  const dummyStoresRaw: Omit<StoreData, 'maxDiscount' | 'discountNum' | 'maxDiscountPercent'>[] = [
-    {
-      id: "dummy-1",
-      name: "스타벅스 강남역점",
-      distance: "350m",
-      distanceNum: 350,
-      image: "starbucks",
-      address: "서울 강남구 강남대로 지하 396"
-    },
-    {
-      id: "dummy-2",
-      name: "베스킨라빈스 역삼점",
-      distance: "520m",
-      distanceNum: 520,
-      image: "baskin",
-      address: "서울 강남구 역삼동 735-3"
-    },
-    {
-      id: "dummy-3",
-      name: "메가커피 테헤란로점",
-      distance: "280m",
-      distanceNum: 280,
-      image: "mega",
-      address: "서울 강남구 테헤란로 123"
-    },
-    {
-      id: "dummy-4",
-      name: "파스쿠찌 삼성점",
-      distance: "450m",
-      distanceNum: 450,
-      image: "pascucci",
-      address: "서울 강남구 삼성동 156-1"
-    },
-    {
-      id: "dummy-5",
-      name: "투썸플레이스 논현점",
-      distance: "610m",
-      distanceNum: 610,
-      image: "twosome",
-      address: "서울 강남구 논현동 120-5"
-    },
-    {
-      id: "dummy-6",
-      name: "스타벅스 선릉역점",
-      distance: "730m",
-      distanceNum: 730,
-      image: "starbucks",
-      address: "서울 강남구 선릉로 428"
-    },
-  ];
-
-  // 더미 데이터에 할인 정보 추가
-  const dummyStores: StoreData[] = dummyStoresRaw.map(store => {
-    const discountInfo = calculateDummyDiscount(store as StoreData);
-    return {
-      ...store,
-      ...discountInfo,
-    };
-  });
-
   const getAddressFromCoords = async (latitude: number, longitude: number) => {
     try {
       console.log("🏠 [주소 변환] 시작:", { latitude, longitude });
@@ -329,18 +208,9 @@ const Main = () => {
       prevSessionRef.current = session;
       
       if (!loggedIn) {
-        // 로그인하지 않은 경우 더미 데이터 사용
-        console.log("📦 [더미 데이터] 사용");
-        setCurrentLocation("강남구 역삼동");
-        setStores(dummyStores);
-        // localStorage에 더미 데이터 저장 (Payment 페이지에서 사용)
-        try {
-          localStorage.setItem('nearbyStores', JSON.stringify(dummyStores));
-        } catch (e) {
-          console.error("localStorage 저장 오류:", e);
-        }
-        setIsLoadingLocation(false);
-        setIsLoadingStores(false);
+        // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
+        console.log("🔐 [인증 필요] 로그인 페이지로 리다이렉트");
+        navigate("/");
         return;
       }
 

@@ -3,11 +3,12 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Gift, CreditCard, Loader2 } from "lucide-react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import JsBarcode from "jsbarcode";
+import { initPaymentWidget, generateOrderId } from "@/lib/tossPayments";
 
 interface UsedGifticon {
   id: string;
@@ -28,7 +29,8 @@ interface SelectedGifticon {
 const Payment = () => {
   const { storeId } = useParams();
   const navigate = useNavigate();
-  const [step, setStep] = useState<1 | 2>(1);
+  const [searchParams] = useSearchParams();
+  const [step, setStep] = useState<1 | 2 | 3>(1); // 1: 기프티콘 선택, 2: 결제 수단 선택, 3: 바코드
   const [gifticons, setGifticons] = useState<UsedGifticon[]>([]);
   const [selectedGifticons, setSelectedGifticons] = useState<Map<string, SelectedGifticon>>(new Map());
   // 추가로 불러온 기프티콘의 관계 추적 (key: 추가된 기프티콘 ID, value: 원본 기프티콘 ID)
@@ -67,12 +69,18 @@ const Payment = () => {
     free_parking: boolean;
     parking_size: string | null;
   } | null>(null);
+  const [isLoadingStoreInfo, setIsLoadingStoreInfo] = useState<boolean>(true);
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<Set<string>>(new Set());
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState<boolean>(true);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
+  const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState<boolean>(false);
   const [inputBudget, setInputBudget] = useState<number | null>(null); // 입력된 예산
   const [isAutoSelectMode, setIsAutoSelectMode] = useState<boolean>(false); // 자동선택 모드 여부
   const [autoSelectedGifticons, setAutoSelectedGifticons] = useState<UsedGifticon[]>([]); // 자동선택 모드의 기프티콘 목록
+  const [paymentWidgets, setPaymentWidgets] = useState<any>(null); // 결제위젯 인스턴스
+  const [isWidgetRendered, setIsWidgetRendered] = useState<boolean>(false); // 위젯 렌더링 상태
+  const widgetInstanceRef = useRef<any>(null); // 위젯 인스턴스 캐싱
+  const [remainingTime, setRemainingTime] = useState<number>(60); // Step 1 타이머 (초 단위)
 
   // 기프티콘 할인율 중 최대값 계산
   const maxGifticonDiscount = useMemo(() => {
@@ -88,72 +96,6 @@ const Payment = () => {
     ? `${maxGifticonDiscount}%`
     : "0%";
 
-  // 더미 기프티콘 데이터
-  const dummyGifticons: UsedGifticon[] = [
-    {
-      id: "dummy-1",
-      available_at: "스타벅스",
-      name: "스타벅스 아메리카노 Tall",
-      expiry_date: "2025-12-31",
-      barcode: "1234567890123",
-      original_price: 4500,
-      sale_price: 3600,
-    },
-    {
-      id: "dummy-2",
-      available_at: "베스킨라빈스",
-      name: "베스킨라빈스 싱글레귤러",
-      expiry_date: "2025-11-30",
-      barcode: "2345678901234",
-      original_price: 3500,
-      sale_price: 2800,
-    },
-    {
-      id: "dummy-3",
-      available_at: "메가커피",
-      name: "메가커피 메가리치아이스티",
-      expiry_date: "2025-10-31",
-      barcode: "3456789012345",
-      original_price: 3000,
-      sale_price: 2400,
-    },
-    {
-      id: "dummy-4",
-      available_at: "컴포즈커피",
-      name: "컴포즈커피 아메리카노",
-      expiry_date: "2025-09-30",
-      barcode: "4567890123456",
-      original_price: 2500,
-      sale_price: 2000,
-    },
-    {
-      id: "dummy-5",
-      available_at: "이디야커피",
-      name: "이디야커피 카페라떼",
-      expiry_date: "2025-08-31",
-      barcode: "5678901234567",
-      original_price: 4000,
-      sale_price: 3200,
-    },
-    {
-      id: "dummy-6",
-      available_at: "파스쿠찌",
-      name: "파스쿠찌 아메리카노",
-      expiry_date: "2025-12-31",
-      barcode: "6789012345678",
-      original_price: 5000,
-      sale_price: 4000,
-    },
-    {
-      id: "dummy-7",
-      available_at: "파스쿠찌",
-      name: "파스쿠찌 카페라떼",
-      expiry_date: "2025-11-30",
-      barcode: "7890123456789",
-      original_price: 5500,
-      sale_price: 4400,
-    },
-  ];
 
   const storeNames: Record<string, string> = {
     baskin: "베스킨라빈스",
@@ -176,6 +118,211 @@ const Payment = () => {
   };
 
   const membershipName = membershipNames[storeId || ""] || "멤버쉽";
+
+  // URL 쿼리 파라미터로 step 관리 (뒤로가기 지원)
+  useEffect(() => {
+    const stepParam = searchParams.get('step');
+    const paymentSuccess = sessionStorage.getItem('payment_success');
+    
+    if (paymentSuccess === 'true') {
+      // 결제 성공 후 돌아온 경우 - 바코드 페이지로
+      setStep(3);
+      sessionStorage.removeItem('payment_success');
+      toast.success('결제가 완료되었습니다! 바코드를 매장에 제시하세요.');
+    } else if (stepParam === '3') {
+      setStep(3);
+    } else if (stepParam === '2') {
+      // Step 2로 이동 - 주문 정보가 있는지 확인
+      const orderDataStr = sessionStorage.getItem('toss_payment_order');
+      if (orderDataStr) {
+        setStep(2);
+      } else {
+        // 주문 정보가 없으면 Step 1로
+        console.warn('주문 정보가 없습니다. Step 1로 이동합니다.');
+        navigate(`/payment/${storeId}`, { replace: true });
+      }
+    } else {
+      // 기본값은 Step 1
+      setStep(1);
+    }
+  }, [searchParams, storeId, navigate]);
+
+  // Step 2 진입 시 결제위젯 렌더링
+  useEffect(() => {
+    if (step !== 2) {
+      // Step 2가 아니면 완전히 정리
+      const paymentMethodEl = document.querySelector("#payment-method");
+      const agreementEl = document.querySelector("#agreement");
+      
+      if (paymentMethodEl) paymentMethodEl.innerHTML = '';
+      if (agreementEl) agreementEl.innerHTML = '';
+      
+      setIsWidgetRendered(false);
+      setPaymentWidgets(null);
+      widgetInstanceRef.current = null;
+      
+      console.log('🧹 결제위젯 cleanup 완료');
+      return;
+    }
+
+    // 이미 렌더링된 경우 재렌더링하지 않음
+    if (isWidgetRendered && paymentWidgets) {
+      console.log('✅ 결제위젯 이미 렌더링됨 - 재사용');
+      return;
+    }
+
+    const renderPaymentWidget = async () => {
+      const renderStart = performance.now();
+      
+      try {
+        const orderDataStr = sessionStorage.getItem('toss_payment_order');
+        if (!orderDataStr) {
+          console.error('주문 정보를 찾을 수 없습니다.');
+          navigate(`/payment/${storeId}`, { replace: true });
+          return;
+        }
+
+        const orderData = JSON.parse(orderDataStr);
+        
+        // DOM 완전히 비우기 (중복 렌더링 방지)
+        console.log('🧹 DOM 초기화 시작');
+        const paymentMethodEl = document.querySelector("#payment-method");
+        const agreementEl = document.querySelector("#agreement");
+        
+        if (paymentMethodEl) paymentMethodEl.innerHTML = '';
+        if (agreementEl) agreementEl.innerHTML = '';
+        
+        // 이전 인스턴스 완전히 제거
+        widgetInstanceRef.current = null;
+        
+        // DOM 준비 대기 (최소화)
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        
+        // 항상 새 위젯 인스턴스 생성
+        console.log('🔵 결제위젯 초기화 시작');
+        const initStart = performance.now();
+        
+        // 타임아웃 설정 (10초 이상 걸리면 재시도)
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('위젯 초기화 타임아웃')), 10000);
+        });
+        
+        const widgets = await Promise.race([
+          initPaymentWidget(orderData.customerKey),
+          timeoutPromise
+        ]) as any;
+        
+        const initTime = Math.round(performance.now() - initStart);
+        console.log(`✅ 결제위젯 초기화 완료 (${initTime}ms)`);
+        
+        // 결제 금액 설정
+        await widgets.setAmount({
+          currency: "KRW",
+          value: orderData.amount,
+        });
+
+        // 결제 UI 순차 렌더링 (점진적 표시)
+        console.log('🔵 결제 UI 렌더링 시작');
+        const uiStart = performance.now();
+        
+        // 결제 수단 먼저 렌더링
+        console.log('🔵 결제 수단 렌더링 중...');
+        const methodStart = performance.now();
+        await widgets.renderPaymentMethods({
+          selector: "#payment-method",
+          variantKey: "DEFAULT",
+        });
+        const methodTime = Math.round(performance.now() - methodStart);
+        console.log(`✅ 결제 수단 렌더링 완료 (${methodTime}ms)`);
+        
+        // 약관 렌더링
+        console.log('🔵 약관 렌더링 중...');
+        const agreementStart = performance.now();
+        await widgets.renderAgreement({
+          selector: "#agreement",
+          variantKey: "AGREEMENT",
+        });
+        const agreementTime = Math.round(performance.now() - agreementStart);
+        console.log(`✅ 약관 렌더링 완료 (${agreementTime}ms)`);
+        
+        const uiTime = Math.round(performance.now() - uiStart);
+        
+        // 위젯 인스턴스 저장
+        widgetInstanceRef.current = widgets;
+        setPaymentWidgets(widgets);
+        setIsWidgetRendered(true);
+        
+        const totalTime = Math.round(performance.now() - renderStart);
+        console.log(`✅ 결제위젯 렌더링 완료 - UI: ${uiTime}ms, 총: ${totalTime}ms`);
+
+      } catch (error: any) {
+        console.error('결제위젯 렌더링 오류:', error);
+        
+        // 모든 에러에 대해 처리
+        const errorMsg = error.message || '';
+        
+        if (errorMsg.includes('타임아웃')) {
+          toast.error('네트워크가 느립니다. 다시 시도하고 있습니다...');
+          
+          // 타임아웃 시 한 번 더 재시도
+          try {
+            console.log('🔄 결제위젯 재시도 시작');
+            const retryStart = performance.now();
+            const widgets = await initPaymentWidget(orderData.customerKey);
+            const retryTime = Math.round(performance.now() - retryStart);
+            console.log(`✅ 결제위젯 재시도 성공 (${retryTime}ms)`);
+            
+            await widgets.setAmount({
+              currency: "KRW",
+              value: orderData.amount,
+            });
+
+            await Promise.all([
+              widgets.renderPaymentMethods({
+                selector: "#payment-method",
+                variantKey: "DEFAULT",
+              }),
+              widgets.renderAgreement({
+                selector: "#agreement",
+                variantKey: "AGREEMENT",
+              }),
+            ]);
+
+            widgetInstanceRef.current = widgets;
+            setPaymentWidgets(widgets);
+            setIsWidgetRendered(true);
+            
+            toast.success('결제 화면을 불러왔습니다.');
+            return;
+          } catch (retryError) {
+            console.error('결제위젯 재시도 실패:', retryError);
+            toast.error('네트워크 연결을 확인해주세요.');
+          }
+        } else if (errorMsg.includes('하나의') || errorMsg.includes('알 수 없는')) {
+          toast.error('결제 화면 준비 중입니다. 잠시 후 다시 시도해주세요.');
+        } else {
+          toast.error('결제 화면을 불러오는데 실패했습니다.');
+        }
+        
+        // DOM과 상태 완전 초기화
+        const paymentMethodEl = document.querySelector("#payment-method");
+        const agreementEl = document.querySelector("#agreement");
+        if (paymentMethodEl) paymentMethodEl.innerHTML = '';
+        if (agreementEl) agreementEl.innerHTML = '';
+        
+        widgetInstanceRef.current = null;
+        setIsWidgetRendered(false);
+        setPaymentWidgets(null);
+        
+        // Step 1로 복귀
+        setTimeout(() => {
+          navigate(`/payment/${storeId}`, { replace: true });
+        }, 1000);
+      }
+    };
+
+    renderPaymentWidget();
+  }, [step, storeId, navigate, isWidgetRendered, paymentWidgets]);
 
   // 실제 매장명 조회 및 브랜드 설정 (Main 페이지에서 넘어온 매장명 매칭)
   useEffect(() => {
@@ -232,32 +379,57 @@ const Payment = () => {
     fetchStoreName();
   }, [storeId]);
 
-  // 프랜차이즈 및 매장 정보 조회
+  // 프랜차이즈 및 매장 정보 조회 (병렬 처리로 최적화)
   useEffect(() => {
     const fetchFranchiseAndStoreInfo = async () => {
       if (!storeBrand) {
         setIsLoadingPaymentMethods(false);
+        setIsLoadingStoreInfo(false);
         return;
       }
 
+      setIsLoadingStoreInfo(true);
+
       try {
         // 1. 프랜차이즈 정보 조회
-        const { data: franchiseData, error: franchiseError } = await supabase
+        const franchisePromise = supabase
           .from('franchises' as any)
           .select('id')
           .eq('name', storeBrand)
           .single();
 
+        // 2. storeId가 UUID인 경우, 매장 정보를 병렬로 조회
+        const isUUID = storeId ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(storeId) : false;
+        
+        let storePromise = null;
+        if (storeId && isUUID) {
+          // UUID인 경우 프랜차이즈 정보와 병렬로 매장 정보 조회
+          storePromise = supabase
+            .from('stores' as any)
+            .select('gifticon_available, local_currency_available, local_currency_discount_rate, parking_available, free_parking, parking_size')
+            .eq('id', storeId)
+            .single();
+        }
+
+        // 프랜차이즈 정보와 매장 정보를 병렬로 기다림
+        const [franchiseResult, storeResult] = await Promise.all([
+          franchisePromise,
+          storePromise
+        ]);
+
+        const { data: franchiseData, error: franchiseError } = franchiseResult;
+
         if (franchiseError && franchiseError.code !== 'PGRST116') {
           console.error("프랜차이즈 조회 오류:", franchiseError);
           setIsLoadingPaymentMethods(false);
+          setIsLoadingStoreInfo(false);
           return;
         }
 
         if (franchiseData) {
           setFranchiseId(franchiseData.id);
 
-          // 2. 프랜차이즈별 결제 방식 조회 (method_name, method_type, rate 포함)
+          // 결제 방식 조회
           const { data: paymentMethodsData, error: paymentMethodsError } = await supabase
             .from('franchise_payment_methods' as any)
             .select('method_name, method_type, rate')
@@ -277,21 +449,32 @@ const Payment = () => {
             setIsLoadingPaymentMethods(false);
           }
         } else {
-          // 프랜차이즈 정보가 없으면 로딩 완료
           setIsLoadingPaymentMethods(false);
         }
 
-        // 3. 매장 정보 조회 (storeId를 기반으로)
+        // 매장 정보 처리
         if (storeId) {
-          // storeId가 UUID 형식인지 확인 (UUID는 8-4-4-4-12 패턴)
-          const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(storeId);
-          
-          if (isUUID) {
-            // storeId가 UUID인 경우, id 컬럼으로 조회
+          if (isUUID && storeResult) {
+            // UUID인 경우, 이미 병렬로 가져온 결과 사용
+            const { data: storeData, error: storeError } = storeResult;
+            if (!storeError && storeData) {
+              setStoreInfo({
+                gifticon_available: storeData.gifticon_available || false,
+                local_currency_available: storeData.local_currency_available || false,
+                local_currency_discount_rate: storeData.local_currency_discount_rate || null,
+                parking_available: storeData.parking_available || false,
+                free_parking: storeData.free_parking || false,
+                parking_size: storeData.parking_size,
+              });
+            }
+            setIsLoadingStoreInfo(false);
+          } else if (!isUUID && franchiseData) {
+            // 숫자인 경우, franchise_id로 조회
             const { data: storeData, error: storeError } = await supabase
               .from('stores' as any)
               .select('gifticon_available, local_currency_available, local_currency_discount_rate, parking_available, free_parking, parking_size')
-              .eq('id', storeId)
+              .eq('franchise_id', franchiseData.id)
+              .limit(1)
               .single();
 
             if (!storeError && storeData) {
@@ -304,32 +487,17 @@ const Payment = () => {
                 parking_size: storeData.parking_size,
               });
             }
+            setIsLoadingStoreInfo(false);
           } else {
-            // storeId가 숫자인 경우, franchise_id로 조회
-            if (franchiseData) {
-              const { data: storeData, error: storeError } = await supabase
-                .from('stores' as any)
-                .select('gifticon_available, local_currency_available, local_currency_discount_rate, parking_available, free_parking, parking_size')
-                .eq('franchise_id', franchiseData.id)
-                .limit(1)
-                .single();
-
-              if (!storeError && storeData) {
-                setStoreInfo({
-                  gifticon_available: storeData.gifticon_available || false,
-                  local_currency_available: storeData.local_currency_available || false,
-                  local_currency_discount_rate: storeData.local_currency_discount_rate || null,
-                  parking_available: storeData.parking_available || false,
-                  free_parking: storeData.free_parking || false,
-                  parking_size: storeData.parking_size,
-                });
-              }
-            }
+            setIsLoadingStoreInfo(false);
           }
+        } else {
+          setIsLoadingStoreInfo(false);
         }
       } catch (error) {
         console.error("프랜차이즈/매장 정보 조회 오류:", error);
         setIsLoadingPaymentMethods(false);
+        setIsLoadingStoreInfo(false);
       }
     };
 
@@ -412,6 +580,11 @@ const Payment = () => {
       });
     }
 
+    // 초기 로딩 중이면 빈 배열 반환 (화면에 아무것도 표시하지 않음)
+    if (isInitialLoading) {
+      return [];
+    }
+
     // 기본값 제거: 로딩 중이거나 정보가 없으면 빈 배열 반환
     // 프랜차이즈 정보가 로딩 중이거나 없는 경우 빈 배열 반환하여 기본값이 표시되지 않도록 함
     if (isLoadingPaymentMethods || (methods.length === 0 && !storeInfo)) {
@@ -419,7 +592,7 @@ const Payment = () => {
     }
 
     return methods;
-  }, [franchisePaymentMethods, storeInfo, gifticons, maxGifticonDiscount, isLoadingPaymentMethods]);
+  }, [franchisePaymentMethods, storeInfo, gifticons, maxGifticonDiscount, isLoadingPaymentMethods, isInitialLoading]);
 
 
   // 이전 로그인 상태를 추적하기 위한 ref 사용
@@ -436,10 +609,10 @@ const Payment = () => {
       prevSessionRef.current = session;
       
       if (!loggedIn) {
-        // 데모 모드: 더미 포인트 설정
-        // 기프티콘은 fetchGifticons에서 브랜드별로 필터링하여 설정됨
-        setUserPoints(50000);
-        setIsLoading(false);
+        // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
+        console.log("🔐 [Payment] 로그인 필요 - 로그인 페이지로 이동");
+        navigate("/");
+        return;
       }
     };
     checkAuth();
@@ -492,18 +665,42 @@ const Payment = () => {
 
   // 초기 데이터 로딩 완료 체크
   useEffect(() => {
-    // storeBrand가 설정되고, 결제 방식 로딩이 완료되면 초기 로딩 종료
-    if (storeBrand && !isLoadingPaymentMethods) {
-      // 약간의 지연을 두고 초기 로딩 종료 (데이터 렌더링 완료 대기)
-      const timer = setTimeout(() => {
-        setIsInitialLoading(false);
-      }, 300);
-      return () => clearTimeout(timer);
-    } else if (!storeBrand) {
-      // storeBrand가 없으면 즉시 로딩 종료
-      setIsInitialLoading(false);
+    // 이미 초기 데이터가 로드되었으면 더 이상 체크하지 않음
+    if (hasInitialDataLoaded) {
+      return;
     }
-  }, [storeBrand, isLoadingPaymentMethods]);
+
+    // storeBrand가 설정되지 않았으면 아직 로딩 중
+    if (!storeBrand) {
+      return;
+    }
+
+    // 결제 방식 로딩이 완료되지 않았으면 대기
+    if (isLoadingPaymentMethods) {
+      return;
+    }
+
+    // 매장 정보 로딩이 완료되지 않았으면 대기
+    if (isLoadingStoreInfo) {
+      return;
+    }
+
+    // 기프티콘 로딩 상태 확인
+    // storeInfo가 null이면 아직 매장 정보를 불러오는 중
+    if (storeInfo === null) {
+      return;
+    }
+
+    // 기프티콘이 사용 가능한 경우, 기프티콘 로딩이 완료될 때까지 대기
+    if (storeInfo.gifticon_available && isLoading) {
+      return;
+    }
+
+    // 모든 로딩이 완료되면 초기 로딩 종료
+    console.log('✅ 모든 데이터 로딩 완료');
+    setHasInitialDataLoaded(true);
+    setIsInitialLoading(false);
+  }, [storeBrand, isLoadingPaymentMethods, isLoadingStoreInfo, isLoading, storeInfo, hasInitialDataLoaded]);
 
   // 사용자 포인트 조회
   useEffect(() => {
@@ -530,46 +727,7 @@ const Payment = () => {
   useEffect(() => {
     const fetchGifticons = async () => {
       if (!isLoggedIn) {
-        // 데모 모드: 더미 데이터 필터링 및 천원대별로 그룹화 (storeBrand에 따라)
-        let filteredDummy = storeBrand 
-          ? dummyGifticons.filter((gifticon) => gifticon.available_at === storeBrand)
-          : dummyGifticons;
-
-        // 데모 포인트(10000원)로 구매 가능한 기프티콘만 필터링
-        const demoPoints = 10000;
-        filteredDummy = filteredDummy.filter((gifticon) => gifticon.sale_price <= demoPoints);
-
-        // 할인효율 기준으로 한 번 정렬
-        const sortedDummy = [...filteredDummy].sort(sortByDiscountEfficiency);
-
-        // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
-        const groupedByThousand = new Map<number, UsedGifticon>();
-        sortedDummy.forEach((item) => {
-          const priceRange = getPriceRange(item.original_price);
-          // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
-          if (!groupedByThousand.has(priceRange)) {
-            groupedByThousand.set(priceRange, item);
-          }
-        });
-
-        // 그룹화된 항목들을 배열로 변환 (이미 할인효율 순으로 정렬됨)
-        const selectedGifticons: UsedGifticon[] = Array.from(groupedByThousand.values());
-
-        // 불러온 순서 추적 및 초기 기프티콘 ID 저장
-        const initialIds = new Set<string>();
-        const loadOrder = new Map<string, number>();
-        selectedGifticons.forEach((gifticon, index) => {
-          initialIds.add(gifticon.id);
-          loadOrder.set(gifticon.id, loadOrderCounter.current++);
-        });
-
-        // 정렬: 작은 금액순(판매가 오름차순)
-        selectedGifticons.sort((a, b) => a.sale_price - b.sale_price);
-
-        setGifticons(selectedGifticons);
-        setInitialGifticonIds(initialIds);
-        setGifticonLoadOrder(loadOrder);
-        updateGifticonsByPriceRange(selectedGifticons);
+        setIsLoading(false);
         return;
       }
 
@@ -577,6 +735,7 @@ const Payment = () => {
         // 브랜드 정보가 없으면 기프티콘 조회하지 않음
         setGifticons([]);
         setGifticonsByPriceRange(new Map());
+        setIsLoading(false);
         return;
       }
 
@@ -771,7 +930,7 @@ const Payment = () => {
   // 페이지 언마운트 시 모든 대기중 기프티콘을 판매중으로 복구
   useEffect(() => {
     return () => {
-      if (!isLoggedIn) return; // 데모 모드에서는 상태 복구 불필요
+      if (!isLoggedIn) return;
 
       const releaseAllReservedGifticons = async () => {
         const { data: { session } } = await supabase.auth.getSession();
@@ -793,6 +952,29 @@ const Payment = () => {
       releaseAllReservedGifticons();
     };
   }, [isLoggedIn, storeBrand]);
+
+  // Step1에서 타이머 카운트다운
+  useEffect(() => {
+    if (step !== 1 || !isLoggedIn || !storeBrand) {
+      setRemainingTime(60); // step이 변경되면 타이머 리셋
+      return;
+    }
+
+    setRemainingTime(60); // step 1 진입시 타이머 초기화
+
+    const intervalId = setInterval(() => {
+      setRemainingTime(prev => {
+        if (prev <= 1) {
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [step, isLoggedIn, storeBrand]);
 
   // Step1에서 1분 이상 머무르면 main으로 이동하고 대기중 기프티콘 복구
   useEffect(() => {
@@ -1447,105 +1629,7 @@ const Payment = () => {
         return;
       }
 
-      // 데모 모드일 때는 간단한 처리
-      if (!isLoggedIn) {
-        // 금액대별 배열 기반으로 처리
-        const priceRange = getPriceRange(gifticon.original_price);
-        const samePriceRangeGifticons = gifticonsByPriceRange.get(priceRange) || [];
-        
-        // 같은 금액대에서 자신의 인덱스 찾기
-        const currentIndex = samePriceRangeGifticons.findIndex(g => g.id === gifticon.id);
-        
-        let gifticonsToRemove: string[] = [];
-        
-        if (currentIndex !== -1) {
-          // 자신보다 먼저 불러온 기프티콘 중 선택 해제된 것이 있는지 확인
-          let hasUnselectedEarlier = false;
-          for (let i = 0; i < currentIndex; i++) {
-            const earlierGifticon = samePriceRangeGifticons[i];
-            const isEarlierSelected = Array.from(selectedGifticons.values())
-              .some(selected => selected.id === earlierGifticon.id);
-            
-            if (!isEarlierSelected) {
-              // 자신보다 먼저 불러온 기프티콘 중 선택 해제된 것이 있음
-              hasUnselectedEarlier = true;
-              break;
-            }
-          }
-          
-          // 자신보다 먼저 불러온 기프티콘 중 선택 해제된 것이 있으면 자신도 화면에서 제거
-          if (hasUnselectedEarlier) {
-            gifticonsToRemove.push(gifticon.id);
-          }
-          
-          // 자신 이후에 불러온 기프티콘 중 선택되지 않은 것들만 처리
-          for (let i = currentIndex + 1; i < samePriceRangeGifticons.length; i++) {
-            const laterGifticon = samePriceRangeGifticons[i];
-            const isLaterSelected = Array.from(selectedGifticons.values())
-              .some(selected => selected.id === laterGifticon.id);
-            
-            if (!isLaterSelected) {
-              gifticonsToRemove.push(laterGifticon.id);
-            }
-          }
-        }
-
-        // 화면에서 제거 (자신보다 먼저 불러온 기프티콘이 선택 해제되었으면 자신도 제거, 자신 이후에 불러온 기프티콘도 제거)
-        setGifticons(prev => {
-          const remaining = prev.filter(g => {
-            // 초기 로딩된 기프티콘은 항상 유지 (단, 자신보다 먼저 불러온 기프티콘이 선택 해제되어 자신도 제거 대상인 경우 제거)
-            if (initialGifticonIds.has(g.id)) {
-              // 자신보다 먼저 불러온 기프티콘이 선택 해제되어 자신도 제거 대상인 경우 제거
-              if (gifticonsToRemove.includes(g.id)) return false;
-              return true;
-            }
-            // 제거 대상 추가 기프티콘만 제거
-            if (gifticonsToRemove.includes(g.id)) return false;
-            // 나머지는 모두 유지
-            return true;
-          });
-
-          // 정렬: 1. 가격대별, 2. 같은 가격대일 경우 불러온 순서대로
-          remaining.sort((a, b) => {
-            const priceRangeA = getPriceRange(a.original_price);
-            const priceRangeB = getPriceRange(b.original_price);
-            if (priceRangeA !== priceRangeB) {
-              return priceRangeA - priceRangeB; // 가격대별 정렬
-            }
-            // 같은 가격대일 경우 불러온 순서대로
-            const orderA = gifticonLoadOrder.get(a.id) ?? 0;
-            const orderB = gifticonLoadOrder.get(b.id) ?? 0;
-            return orderA - orderB;
-          });
-
-          // 금액대별 배열 업데이트
-          updateGifticonsByPriceRange(remaining);
-
-          return remaining;
-        });
-
-        // 관계 맵에서 제거
-        setAddedGifticonRelations(prev => {
-          const newMap = new Map(prev);
-          gifticonsToRemove.forEach(id => {
-            newMap.delete(id);
-            // 제거된 기프티콘을 부모로 가진 관계도 삭제
-            for (const [addedId, parentId] of newMap.entries()) {
-              if (parentId === id) {
-                newMap.delete(addedId);
-              }
-            }
-          });
-          return newMap;
-        });
-
-        // 선택 상태에서 제거
-        const newMap = new Map(selectedGifticons);
-        newMap.delete(gifticon.id);
-        setSelectedGifticons(newMap);
-        toast.success("선택이 취소되었습니다.");
-        return;
-      }
+      if (!isLoggedIn) return;
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
@@ -1724,27 +1808,8 @@ const Payment = () => {
         return;
       }
 
-      // 데모 모드일 때는 간단한 처리 (포인트 체크 포함)
       if (!isLoggedIn) {
-        // 포인트 한도 체크
-        const totalCostDemo = Array.from(selectedGifticons.values())
-          .reduce((sum, item) => sum + item.sale_price, 0);
-        const additionalCostDemo = gifticon.sale_price;
-
-        if (totalCostDemo + additionalCostDemo > userPoints) {
-          toast.error(`포인트가 부족합니다. 보유 포인트: ${userPoints.toLocaleString()}원`);
-          return;
-        }
-
-        setSelectedGifticons(new Map(selectedGifticons).set(gifticon.id, {
-          id: gifticon.id,
-          sale_price: gifticon.sale_price,
-          reservedId: gifticon.id
-        }));
-
-        toast.success(`${gifticon.sale_price.toLocaleString()}원 기프티콘 선택`);
-        
-        // 비슷한 가격대 기프티콘 추가 로드 (데모 모드에서는 동작 안 함)
+        toast.error("로그인이 필요합니다.");
         return;
       }
 
@@ -1858,22 +1923,8 @@ const Payment = () => {
       return;
     }
 
-    // 데모 모드일 때는 간단한 처리
     if (!isLoggedIn) {
-      // 데모 모드에서 더미 바코드 맵 생성 (각 기프티콘마다 고유한 바코드)
-      const demoBarcodeMap = new Map<string, string>();
-      for (const selected of selectedGifticons.values()) {
-        const gifticon = gifticons.find(g => g.sale_price === selected.sale_price);
-        if (gifticon) {
-          // 기본 바코드 사용
-          const baseBarcode = gifticon.barcode;
-          demoBarcodeMap.set(selected.reservedId, baseBarcode);
-        }
-      }
-      setActualGifticonBarcodes(demoBarcodeMap);
-      toast.success("결제가 완료되었습니다! (데모 모드)");
-      // 데모 모드에서는 선택 상태를 유지하여 Step 2에서 바코드를 표시할 수 있도록 함
-      setStep(2);
+      toast.error("로그인이 필요합니다.");
       return;
     }
 
@@ -1984,14 +2035,71 @@ const Payment = () => {
 
   // 결제 완료 처리 (상태 초기화 및 메인으로 이동)
   const handlePaymentComplete = () => {
+    // sessionStorage 정리
+    sessionStorage.removeItem('toss_payment_order');
+    sessionStorage.removeItem('toss_payment_return_url');
+    sessionStorage.removeItem('payment_success');
+    sessionStorage.removeItem('payment_result');
+    
+    // 상태 초기화
     setSelectedGifticons(new Map());
     setCompletedPurchases(new Set());
+    
+    // 메인으로 이동
+    toast.success('결제가 완료되었습니다!');
     navigate('/main');
   };
 
-  const handleConfirmStep1 = () => {
-    // 결제 처리
-    handlePayment();
+  const handleConfirmStep1 = async () => {
+    // Step 1 → Step 2 (결제 수단 선택 페이지로 이동)
+    if (selectedGifticons.size === 0) {
+      toast.error("선택된 기프티콘이 없습니다.");
+      return;
+    }
+
+    if (totalCost <= 0) {
+      toast.error("결제 금액이 올바르지 않습니다.");
+      return;
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.error("로그인이 필요합니다.");
+        navigate('/');
+        return;
+      }
+
+      // customerKey 생성 (사용자 ID 기반)
+      const customerKey = `customer_${session.user.id.replace(/-/g, '').substring(0, 20)}`;
+      
+      // orderId 생성
+      const orderId = generateOrderId();
+      
+      // 주문 정보를 sessionStorage에 저장
+      const orderData = {
+        orderId,
+        amount: totalCost,
+        orderName: `${actualStoreName || '매장'} 기프티콘 ${selectedGifticons.size}개`,
+        storeId,
+        storeName: actualStoreName,
+        storeBrand,
+        customerKey,
+        gifticons: Array.from(selectedGifticons.values()),
+        selectedGifticonIds: Array.from(selectedGifticons.keys()),
+        timestamp: new Date().toISOString(),
+      };
+      
+      sessionStorage.setItem('toss_payment_order', JSON.stringify(orderData));
+      
+      // URL을 변경하여 브라우저 히스토리에 추가 (뒤로가기 지원)
+      navigate(`/payment/${storeId}?step=2`, { replace: false });
+
+    } catch (error: any) {
+      console.error("오류:", error);
+      toast.error(error.message || "오류가 발생했습니다.");
+    }
   };
 
   // Step 2에서 결제하기 버튼 클릭 시 네이버페이 앱 실행
@@ -2002,9 +2110,11 @@ const Payment = () => {
     }
   };
 
-  // Step 2에서 뒤로가기 클릭 시 처리
-  const handleBackFromStep2 = () => {
-    setStep(1);
+  // Step 3에서 뒤로가기 클릭 시 처리
+  const handleBackFromStep3 = () => {
+    // 결제 완료 후에는 뒤로가기 불가 (메인으로 이동)
+    toast.info('결제가 완료되었습니다. 메인 페이지로 이동합니다.');
+    navigate('/main');
   };
 
   // 2단계에서 보여줄 총 카드 수 (기프티콘 + 멤버십)
@@ -2129,10 +2239,7 @@ const Payment = () => {
 
       if (allReservedIds.length === 0) return;
 
-      // 데모 모드에서는 실제 바코드 조회 불필요 (이미 gifticon.barcode에 있음)
-      if (!isLoggedIn) {
-        return;
-      }
+      if (!isLoggedIn) return;
 
       try {
         // 각 예약된 기프티콘의 실제 바코드 조회
@@ -2162,7 +2269,7 @@ const Payment = () => {
   useEffect(() => {
     const markGifticonsAsUsed = async () => {
       if (step !== 2 || recentlyPurchasedCount === 0) return;
-      if (!isLoggedIn) return; // 데모 모드에서는 사용완료 처리 불필요
+      if (!isLoggedIn) return;
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
@@ -2221,33 +2328,55 @@ const Payment = () => {
   }
 
   return (
-    <div className={`bg-background ${step === 2 ? 'h-screen overflow-hidden' : 'min-h-screen pb-6'}`}>
-      {step === 1 && (
+    <div className={`bg-background ${step === 3 ? 'h-screen overflow-hidden' : 'min-h-screen pb-6'}`}>
+      {(step === 1 || step === 2) && (
         <header className="sticky top-0 z-50 bg-card border-b border-border">
           <div className="max-w-md mx-auto py-4 relative">
-            <Link to="/main" className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-            <h1 className="text-xl font-bold w-full text-center">
-              {actualStoreName || "매장"}
-            </h1>
+            {step === 2 ? (
+              <button 
+                onClick={() => {
+                  // Step 2에서 Step 1로 돌아가기
+                  console.log('🔙 Step 2 → Step 1 뒤로가기');
+                  
+                  sessionStorage.removeItem('toss_payment_order');
+                  
+                  // Step 1로 이동 (cleanup은 useEffect에서 자동 처리)
+                  navigate(`/payment/${storeId}`, { replace: false });
+                }} 
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-10"
+              >
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
+              </button>
+            ) : (
+              <Link to="/main" className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
+              </Link>
+            )}
+            <div className="flex flex-col items-center justify-center">
+              <h1 className="text-xl font-bold">
+                {step === 2 ? "결제 수단 선택" : (actualStoreName || "매장")}
+              </h1>
+              {step === 1 && isLoggedIn && storeBrand && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  {Math.floor(remainingTime / 60)}:{String(remainingTime % 60).padStart(2, '0')}
+                </div>
+              )}
+            </div>
           </div>
         </header>
       )}
       
-      <main className={`max-w-md mx-auto ${step === 2 ? 'h-full flex flex-col pl-14 pr-4 overflow-hidden' : 'px-4 py-6 space-y-4'}`}>
+      <main className={`max-w-md mx-auto ${step === 3 ? 'h-full flex flex-col pl-14 pr-4 overflow-hidden' : 'px-4 py-6 space-y-4'}`}>
         {step === 1 ? (
           <>
             {/* Payment Method Selection */}
             <div className="space-y-3">
               <h2 className="text-lg font-bold mb-4">결제방식 추천</h2>
-              {isLoadingPaymentMethods ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <p className="text-muted-foreground">결제 방식 정보를 불러오는 중...</p>
-                </div>
-              ) : paymentMethods.length === 0 ? (
+              {paymentMethods.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <p className="text-muted-foreground">사용 가능한 결제 방식이 없습니다.</p>
                 </div>
@@ -2424,9 +2553,7 @@ const Payment = () => {
                     </div>
                   </div>
                 
-                {isLoading ? (
-                      <div className="text-center py-8 text-muted-foreground">로딩 중...</div>
-                    ) : (isAutoSelectMode ? autoSelectedGifticons : gifticons).length === 0 ? (
+                {(isAutoSelectMode ? autoSelectedGifticons : gifticons).length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         등록된 기프티콘이 없습니다.
                       </div>
@@ -2529,15 +2656,118 @@ const Payment = () => {
               확인
             </Button>
           </>
+        ) : step === 2 ? (
+          <>
+            {/* Step 2: 결제 수단 선택 (Toss Payments 결제위젯) */}
+            <div className="space-y-4">
+              <Card className="p-6">
+                <h2 className="text-lg font-bold mb-4">주문 정보</h2>
+                <div className="space-y-3">
+                  {/* 선택된 기프티콘 목록 */}
+                  <div className="space-y-2">
+                    <span className="text-sm text-muted-foreground">상품명</span>
+                    <div className="space-y-1.5">
+                      {Array.from(selectedGifticons.values()).map((selected, index) => {
+                        const gifticon = (isAutoSelectMode ? autoSelectedGifticons : gifticons).find(g => g.id === selected.id);
+                        if (!gifticon) return null;
+                        
+                        return (
+                          <div key={selected.id} className="flex justify-between items-center bg-muted/30 rounded-lg px-3 py-2">
+                            <span className="font-medium text-sm">
+                              {index + 1}. {gifticon.name || "기프티콘"}
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                              {gifticon.sale_price.toLocaleString()}원
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  {/* 총 결제 금액 */}
+                  <div className="flex justify-between pt-3 border-t">
+                    <span className="text-muted-foreground">총 결제 금액</span>
+                    <span className="font-bold text-lg text-primary">{totalCost.toLocaleString()}원</span>
+                  </div>
+                </div>
+              </Card>
+
+              {/* 결제위젯 UI 렌더링 영역 */}
+              {!isWidgetRendered && (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                  <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                  <div className="text-center space-y-2">
+                    <p className="text-sm font-medium text-foreground">결제 화면을 불러오는 중입니다</p>
+                    <p className="text-xs text-muted-foreground">
+                      네트워크 상태에 따라 최대 10초 정도 소요될 수 있습니다
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              <div id="payment-method" className={isWidgetRendered ? '' : 'hidden'}></div>
+              <div id="agreement" className={isWidgetRendered ? '' : 'hidden'}></div>
+
+              {/* 결제하기 버튼 */}
+              <Button
+                id="payment-button"
+                onClick={async () => {
+                  if (!paymentWidgets) {
+                    toast.error('결제 준비 중입니다. 잠시 후 다시 시도해주세요.');
+                    return;
+                  }
+
+                  try {
+                    setIsLoading(true);
+                    const orderDataStr = sessionStorage.getItem('toss_payment_order');
+                    if (!orderDataStr) {
+                      toast.error('주문 정보를 찾을 수 없습니다.');
+                      setStep(1);
+                      return;
+                    }
+
+                    const orderData = JSON.parse(orderDataStr);
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) {
+                      toast.error('로그인이 필요합니다.');
+                      navigate('/');
+                      return;
+                    }
+
+                    // 결제 요청
+                    await paymentWidgets.requestPayment({
+                      orderId: orderData.orderId,
+                      orderName: orderData.orderName,
+                      successUrl: `${window.location.origin}/payment-success?storeId=${storeId}`,
+                      failUrl: `${window.location.origin}/payment-fail`,
+                      customerEmail: session.user.email || undefined,
+                      customerName: session.user.user_metadata?.name || undefined,
+                      customerMobilePhone: session.user.user_metadata?.phone || undefined,
+                    });
+                  } catch (error: any) {
+                    console.error('결제 오류:', error);
+                    toast.error(error.message || '결제 중 오류가 발생했습니다.');
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+                className="w-full h-14 text-lg font-semibold rounded-xl"
+                disabled={isLoading || !paymentWidgets}
+              >
+                {isLoading ? '처리 중...' : paymentWidgets ? '결제하기' : '준비 중...'}
+              </Button>
+            </div>
+          </>
         ) : (
           <>
-            {/* Step 2: Vertical Scroll View */}
+            {/* Step 3: Vertical Scroll View (바코드) */}
             <div className="absolute left-2 top-4 flex flex-col gap-3 z-50">
               <Button 
                 variant="ghost" 
                 size="icon" 
                 className="rounded-full"
-                onClick={handleBackFromStep2}
+                onClick={handleBackFromStep3}
               >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
@@ -2590,18 +2820,9 @@ const Payment = () => {
                 {purchasedGifticonsList.map((item, index) => {
                   const gifticon = item.gifticon;
                   // 실제 바코드가 있으면 사용, 없으면 기본 바코드 사용
-                  // 데모 모드에서도 각 기프티콘마다 고유한 바코드 생성
                   let actualBarcode = actualGifticonBarcodes.get(item.id);
                   if (!actualBarcode) {
-                    // 데모 모드에서 바코드 맵에 값이 없을 경우, 인덱스 기반으로 고유한 바코드 생성
-                    if (!isLoggedIn) {
-                      const baseBarcode = gifticon.barcode;
-                      const baseNumber = parseInt(baseBarcode.replace(/\D/g, '')) || 1234567890123;
-                      const uniqueNumber = baseNumber + index;
-                      actualBarcode = String(uniqueNumber).padStart(13, '0').slice(0, 13);
-                    } else {
-                      actualBarcode = gifticon.barcode;
-                    }
+                    actualBarcode = gifticon.barcode;
                   }
                   return (
                     <div

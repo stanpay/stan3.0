@@ -14,6 +14,9 @@ import MyGifticons from "./pages/MyGifticons";
 import History from "./pages/History";
 import PaymentMethods from "./pages/PaymentMethods";
 import PointsMembership from "./pages/PointsMembership";
+import CallbackAuth from "./pages/CallbackAuth";
+import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentFail from "./pages/PaymentFail";
 import NotFound from "./pages/NotFound";
 import ChatSupport from "./components/ChatSupport";
 
@@ -37,6 +40,9 @@ const App = () => (
           <Route path="/history" element={<History />} />
           <Route path="/points-membership" element={<PointsMembership />} />
           <Route path="/payment-methods" element={<PaymentMethods />} />
+          <Route path="/callback-auth" element={<CallbackAuth />} />
+          <Route path="/payment-success" element={<PaymentSuccess />} />
+          <Route path="/payment-fail" element={<PaymentFail />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

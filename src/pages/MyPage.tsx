@@ -53,14 +53,9 @@ const MyPage = () => {
         const admin = await isOperator();
         setIsAdmin(admin);
       } else {
-        // 로그인하지 않은 경우 더미 데이터 사용
-        setUserEmail("user@example.com");
-        setUserName("사용자");
-        setIsLoggedIn(false);
-        setPoints(15000);
-        setGifticonsCount(12);
-        setPaymentCount(45);
-        setSellingCount(8);
+        // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
+        navigate("/");
+        return;
       }
       
       setLoading(false);

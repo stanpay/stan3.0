@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,10 +8,21 @@ import { Card } from "@/components/ui/card";
 import { Upload, ArrowLeft } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const Sell = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate("/");
+      }
+    };
+    checkAuth();
+  }, [navigate]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

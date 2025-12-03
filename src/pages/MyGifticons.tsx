@@ -79,76 +79,9 @@ const MyGifticons = () => {
         }
       } else {
         setIsLoggedIn(false);
-        // Show dummy data for non-logged in users
-        const dummyGifticons: Gifticon[] = [
-          {
-            id: "1",
-            brand: "스타벅스",
-            name: "카페 아메리카노 Tall",
-            originalPrice: 4500,
-            image: "☕",
-            expiryDate: "2025.12.31",
-            status: "사용가능",
-            isSelling: false,
-            barcode: "1234567890123",
-          },
-          {
-            id: "2",
-            brand: "CU",
-            name: "5천원권",
-            originalPrice: 5000,
-            image: "🎫",
-            expiryDate: "2025.11.30",
-            status: "사용가능",
-            isSelling: false,
-            barcode: "2345678901234",
-          },
-          {
-            id: "3",
-            brand: "맥도날드",
-            name: "빅맥 세트",
-            originalPrice: 6500,
-            image: "🍔",
-            expiryDate: "2025.10.15",
-            status: "사용가능",
-            isSelling: false,
-            barcode: "3456789012345",
-          },
-          {
-            id: "4",
-            brand: "GS25",
-            name: "3천원권",
-            originalPrice: 3000,
-            image: "🎫",
-            expiryDate: "2025.09.20",
-            status: "사용완료",
-            isSelling: false,
-            barcode: "4567890123456",
-          },
-          {
-            id: "5",
-            brand: "투썸플레이스",
-            name: "아메리카노(HOT)",
-            originalPrice: 4000,
-            image: "☕",
-            expiryDate: "2025.12.15",
-            status: "사용가능",
-            isSelling: false,
-            barcode: "5678901234567",
-          },
-          {
-            id: "6",
-            brand: "배스킨라빈스",
-            name: "파인트 아이스크림",
-            originalPrice: 8500,
-            image: "🍦",
-            expiryDate: "2025.11.25",
-            status: "사용가능",
-            isSelling: false,
-            barcode: "6789012345678",
-          },
-        ];
-        setGifticons(dummyGifticons);
+        // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
+        navigate("/");
+        return;
       }
       
       setLoading(false);
