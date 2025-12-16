@@ -791,7 +791,7 @@ const Payment = () => {
         }
 
         // 할인효율 기준으로 한 번 정렬 (DB 레벨에서는 계산식 정렬이 불가능하므로 클라이언트에서 정렬)
-        const sortedData = [...affordableData].sort(sortByDiscountEfficiency);
+        const sortedData = [...allData].sort(sortByDiscountEfficiency);
 
         // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
         const groupedByThousand = new Map<number, UsedGifticon>();
@@ -1153,31 +1153,30 @@ const Payment = () => {
         // original_price가 남은 예산을 넘지 않으면 선택 가능
         if (gifticon.original_price <= remainingOriginalPriceBudget) {
           const key = gifticon.id;
-            if (!selectedGifticonsMap.has(key)) {
-              // 대기중으로 변경
-              const { error: reserveError } = await supabase
-                .from('used_gifticons')
-                .update({
-                  status: '대기중',
-                  reserved_by: session.user.id,
-                  reserved_at: new Date().toISOString()
-                })
-                .eq('id', gifticon.id);
+          if (!selectedGifticonsMap.has(key)) {
+            // 대기중으로 변경
+            const { error: reserveError } = await supabase
+              .from('used_gifticons')
+              .update({
+                status: '대기중',
+                reserved_by: session.user.id,
+                reserved_at: new Date().toISOString()
+              })
+              .eq('id', gifticon.id);
 
-              if (reserveError) {
-                console.error(`기프티콘 예약 오류 (${gifticon.id}):`, reserveError);
-                continue;
-              }
-
-              selectedGifticonsMap.set(key, {
-                id: gifticon.id,
-                sale_price: gifticon.sale_price,
-                reservedId: gifticon.id
-              });
-              autoSelectedList.push(gifticon);
-              remainingOriginalPriceBudget -= gifticon.original_price;
-              totalSalePrice += gifticon.sale_price;
+            if (reserveError) {
+              console.error(`기프티콘 예약 오류 (${gifticon.id}):`, reserveError);
+              continue;
             }
+
+            selectedGifticonsMap.set(key, {
+              id: gifticon.id,
+              sale_price: gifticon.sale_price,
+              reservedId: gifticon.id
+            });
+            autoSelectedList.push(gifticon);
+            remainingOriginalPriceBudget -= gifticon.original_price;
+            totalSalePrice += gifticon.sale_price;
           }
         }
       }
@@ -1315,8 +1314,7 @@ const Payment = () => {
         return;
       }
 
-
-      const sortedData = [...affordableData].sort(sortByDiscountEfficiency);
+      const sortedData = [...allData].sort(sortByDiscountEfficiency);
       const groupedByThousand = new Map<number, UsedGifticon>();
       sortedData.forEach((item) => {
         const priceRange = getPriceRange(item.original_price);
