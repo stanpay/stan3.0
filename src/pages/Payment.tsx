@@ -1297,7 +1297,6 @@ const Payment = () => {
           setIsLoading(false);
           return;
         }
-      }
 
       // 대기중인 기프티콘이 없거나 없는 천원대가 있으면 판매중에서 가져오기
       const { data: allData, error: fetchError } = await supabase
