@@ -44,7 +44,6 @@ const Payment = () => {
   let loadOrderCounter = useRef(0);
   // 추가 로드 중인 기프티콘 ID 추적 (중복 호출 방지)
   const loadingGifticonIds = useRef<Set<string>>(new Set());
-  const [userPoints, setUserPoints] = useState<number>(0);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [actualStoreName, setActualStoreName] = useState<string>("");
@@ -702,26 +701,6 @@ const Payment = () => {
     setIsInitialLoading(false);
   }, [storeBrand, isLoadingPaymentMethods, isLoadingStoreInfo, isLoading, storeInfo, hasInitialDataLoaded]);
 
-  // 사용자 포인트 조회
-  useEffect(() => {
-    const fetchUserPoints = async () => {
-      if (!isLoggedIn) return;
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('points')
-          .eq('id', session.user.id)
-          .single();
-        
-        if (profile) {
-          setUserPoints(profile.points || 0);
-        }
-      }
-    };
-    fetchUserPoints();
-  }, [isLoggedIn]);
 
   // 기프티콘 목록 조회 (브랜드별 필터링 및 천원대별 중복 제거, 할인율 순 정렬)
   useEffect(() => {
@@ -748,15 +727,6 @@ const Payment = () => {
           return;
         }
 
-        // 포인트 잔액 조회
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('points')
-          .eq('id', session.user.id)
-          .single();
-        
-        const currentPoints = profile?.points || 0;
-
         // 먼저 이미 내가 예약한 대기중 기프티콘 조회
         const { data: existingPending, error: existingError } = await supabase
           .from('used_gifticons')
@@ -769,46 +739,39 @@ const Payment = () => {
 
         // 이미 대기중인 기프티콘이 있고 천원대별로 하나씩 이상 있으면 그것만 표시
         if (existingPending && existingPending.length > 0) {
-          // 포인트 잔액으로 구매 가능한 기프티콘만 필터링
-          const affordablePending = existingPending.filter(item => item.sale_price <= currentPoints);
-          
-          if (affordablePending.length === 0) {
-            // 대기중인 기프티콘 중 구매 가능한 것이 없으면 아래에서 판매중에서 새로 가져옴
-          } else {
-            // 할인효율 기준으로 한 번 정렬 (DB 레벨에서는 계산식 정렬이 불가능하므로 클라이언트에서 정렬)
-            const sortedPending = [...affordablePending].sort(sortByDiscountEfficiency);
+          // 할인효율 기준으로 한 번 정렬 (DB 레벨에서는 계산식 정렬이 불가능하므로 클라이언트에서 정렬)
+          const sortedPending = [...existingPending].sort(sortByDiscountEfficiency);
 
-            // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
-            const existingGroupedByThousand = new Map<number, UsedGifticon>();
-            sortedPending.forEach((item) => {
-              const priceRange = getPriceRange(item.original_price);
-              // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
-              if (!existingGroupedByThousand.has(priceRange)) {
-                existingGroupedByThousand.set(priceRange, item);
-              }
-            });
+          // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
+          const existingGroupedByThousand = new Map<number, UsedGifticon>();
+          sortedPending.forEach((item) => {
+            const priceRange = getPriceRange(item.original_price);
+            // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
+            if (!existingGroupedByThousand.has(priceRange)) {
+              existingGroupedByThousand.set(priceRange, item);
+            }
+          });
 
-            // 그룹화된 항목들을 배열로 변환 (이미 할인효율 순으로 정렬됨)
-            const selectedGifticons: UsedGifticon[] = Array.from(existingGroupedByThousand.values());
+          // 그룹화된 항목들을 배열로 변환 (이미 할인효율 순으로 정렬됨)
+          const selectedGifticons: UsedGifticon[] = Array.from(existingGroupedByThousand.values());
 
-            // 불러온 순서 추적 및 초기 기프티콘 ID 저장
-            const initialIds = new Set<string>();
-            const loadOrder = new Map<string, number>();
-            selectedGifticons.forEach((gifticon) => {
-              initialIds.add(gifticon.id);
-              loadOrder.set(gifticon.id, loadOrderCounter.current++);
-            });
+          // 불러온 순서 추적 및 초기 기프티콘 ID 저장
+          const initialIds = new Set<string>();
+          const loadOrder = new Map<string, number>();
+          selectedGifticons.forEach((gifticon) => {
+            initialIds.add(gifticon.id);
+            loadOrder.set(gifticon.id, loadOrderCounter.current++);
+          });
 
-            // 정렬: 작은 금액순(판매가 오름차순)
-            selectedGifticons.sort((a, b) => a.sale_price - b.sale_price);
+          // 정렬: 작은 금액순(판매가 오름차순)
+          selectedGifticons.sort((a, b) => a.sale_price - b.sale_price);
 
-            setGifticons(selectedGifticons);
-            setInitialGifticonIds(initialIds);
-            setGifticonLoadOrder(loadOrder);
-            updateGifticonsByPriceRange(selectedGifticons);
-            setIsLoading(false);
-            return;
-          }
+          setGifticons(selectedGifticons);
+          setInitialGifticonIds(initialIds);
+          setGifticonLoadOrder(loadOrder);
+          updateGifticonsByPriceRange(selectedGifticons);
+          setIsLoading(false);
+          return;
         }
 
         // 대기중인 기프티콘이 없거나 없는 천원대가 있으면 판매중에서 가져오기
@@ -824,17 +787,6 @@ const Payment = () => {
           setGifticons([]);
           setGifticonsByPriceRange(new Map());
           setIsLoading(false);
-          return;
-        }
-
-        // 포인트 잔액보다 저렴한 기프티콘만 필터링
-        const affordableData = allData.filter(item => item.sale_price <= currentPoints);
-        
-        if (affordableData.length === 0) {
-          setGifticons([]);
-          setGifticonsByPriceRange(new Map());
-          setIsLoading(false);
-          toast.info("포인트 잔액으로 구매 가능한 기프티콘이 없습니다.");
           return;
         }
 
@@ -925,7 +877,7 @@ const Payment = () => {
     };
 
     fetchGifticons();
-  }, [isLoggedIn, storeBrand, userPoints]);
+  }, [isLoggedIn, storeBrand]);
 
   // 페이지 언마운트 시 모든 대기중 기프티콘을 판매중으로 복구
   useEffect(() => {
@@ -1195,14 +1147,12 @@ const Payment = () => {
       const selectedGifticonsMap = new Map<string, SelectedGifticon>();
       const autoSelectedList: UsedGifticon[] = []; // 자동선택된 기프티콘 목록 저장
       let remainingOriginalPriceBudget = inputBudget; // 총 기프티콘 금액권 예산
-      let totalSalePrice = 0; // 총 구매 포인트
+      let totalSalePrice = 0; // 총 구매 금액
 
       for (const gifticon of autoSelectList) {
         // original_price가 남은 예산을 넘지 않으면 선택 가능
         if (gifticon.original_price <= remainingOriginalPriceBudget) {
-          // 구매 포인트도 확인 (포인트가 부족하면 선택 불가)
-          if (totalSalePrice + gifticon.sale_price <= userPoints) {
-            const key = gifticon.id;
+          const key = gifticon.id;
             if (!selectedGifticonsMap.has(key)) {
               // 대기중으로 변경
               const { error: reserveError } = await supabase
@@ -1311,15 +1261,6 @@ const Payment = () => {
     // 추천 기프티콘 다시 불러오기
     setIsLoading(true);
     try {
-      // 포인트 잔액 조회
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('points')
-        .eq('id', session.user.id)
-        .single();
-      
-      const currentPoints = profile?.points || 0;
-
       // 먼저 이미 내가 예약한 대기중 기프티콘 조회
       const { data: existingPending, error: existingError } = await supabase
         .from('used_gifticons')
@@ -1332,11 +1273,7 @@ const Payment = () => {
 
       // 이미 대기중인 기프티콘이 있고 천원대별로 하나씩 이상 있으면 그것만 표시
       if (existingPending && existingPending.length > 0) {
-        // 포인트 잔액으로 구매 가능한 기프티콘만 필터링
-        const affordablePending = existingPending.filter(item => item.sale_price <= currentPoints);
-        
-        if (affordablePending.length > 0) {
-          const sortedPending = [...affordablePending].sort(sortByDiscountEfficiency);
+          const sortedPending = [...existingPending].sort(sortByDiscountEfficiency);
           const existingGroupedByThousand = new Map<number, UsedGifticon>();
           sortedPending.forEach((item) => {
             const priceRange = getPriceRange(item.original_price);
@@ -1378,15 +1315,6 @@ const Payment = () => {
         return;
       }
 
-      // 포인트 잔액보다 저렴한 기프티콘만 필터링
-      const affordableData = allData.filter(item => item.sale_price <= currentPoints);
-      
-      if (affordableData.length === 0) {
-        setGifticons([]);
-        setIsLoading(false);
-        toast.info("포인트 잔액으로 구매 가능한 기프티콘이 없습니다.");
-        return;
-      }
 
       const sortedData = [...affordableData].sort(sortByDiscountEfficiency);
       const groupedByThousand = new Map<number, UsedGifticon>();
@@ -1520,9 +1448,9 @@ const Payment = () => {
 
       console.log(`[기프티콘 추가 로드] 조회된 기프티콘 수: ${similarData.length}`);
 
-      // 이미 불러온 기프티콘 제외 (ID 기준) 및 포인트 잔액 체크
+      // 이미 불러온 기프티콘 제외 (ID 기준)
       const newData = similarData.filter(item => 
-        !existingGifticonIds.has(item.id) && item.sale_price <= userPoints
+        !existingGifticonIds.has(item.id)
       );
 
       console.log(`[기프티콘 추가 로드] 새로운 기프티콘 수: ${newData.length}`);
@@ -1798,16 +1726,6 @@ const Payment = () => {
         return;
       }
 
-      // 포인트 한도 체크
-      const totalCost = Array.from(selectedGifticons.values())
-        .reduce((sum, item) => sum + item.sale_price, 0);
-      const additionalCost = gifticon.sale_price;
-
-      if (totalCost + additionalCost > userPoints) {
-        toast.error(`포인트가 부족합니다. 보유 포인트: ${userPoints.toLocaleString()}원`);
-        return;
-      }
-
       if (!isLoggedIn) {
         toast.error("로그인이 필요합니다.");
         return;
@@ -1876,7 +1794,7 @@ const Payment = () => {
   };
 
 
-  // 총 선택한 포인트 계산 (결제 완료된 기프티콘 제외)
+  // 총 선택한 금액 계산 (결제 완료된 기프티콘 제외)
   const totalCost = Array.from(selectedGifticons.values())
     .reduce((sum, item) => {
       // 이미 결제 완료된 기프티콘은 제외
@@ -1918,10 +1836,6 @@ const Payment = () => {
       return;
     }
 
-    if (totalCost > userPoints) {
-      toast.error("포인트가 부족합니다.");
-      return;
-    }
 
     if (!isLoggedIn) {
       toast.error("로그인이 필요합니다.");
@@ -2009,15 +1923,6 @@ const Payment = () => {
         setRecentlyPurchasedCount(typedGifticonsData.length);
       }
 
-      // 포인트 차감
-      const { error: pointsError } = await supabase
-        .from('profiles')
-        .update({ points: userPoints - totalCost })
-        .eq('id', session.user.id);
-
-      if (pointsError) throw pointsError;
-
-      setUserPoints(userPoints - totalCost);
       toast.success("결제가 완료되었습니다!");
       
       // 결제 완료된 기프티콘 ID 저장 (기존 + 새로 결제한 항목)
@@ -2548,9 +2453,6 @@ const Payment = () => {
                         {isAutoSelectMode ? "기프티콘 자동선택" : "추천 기프티콘"}
                       </h2>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      보유 포인트: {userPoints.toLocaleString()}원
-                    </div>
                   </div>
                 
                 {(isAutoSelectMode ? autoSelectedGifticons : gifticons).length === 0 ? (
@@ -2565,9 +2467,7 @@ const Payment = () => {
                           const discountAmount = gifticon.original_price - gifticon.sale_price;
                           const discountPercent = Math.round((discountAmount / gifticon.original_price) * 100);
                           
-                          // 포인트 체크: 선택되지 않은 기프티콘의 경우 총 비용 + 현재 기프티콘 비용이 포인트를 초과하면 선택 불가
-                          const canSelect = isSelected || (totalCost + gifticon.sale_price <= userPoints);
-                          const isDisabled = isLoading || !canSelect || (isAutoSelectMode && !isSelected);
+                          const isDisabled = isLoading || (isAutoSelectMode && !isSelected);
 
                           return (
                             <div
@@ -2618,7 +2518,7 @@ const Payment = () => {
                 {selectedGifticons.size > 0 && (
                   <div className="mt-4 pt-4 border-t border-border">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold">총 구매 포인트</span>
+                      <span className="font-semibold">총 구매 금액</span>
                       <span className="font-bold text-lg text-primary">
                         {totalCost.toLocaleString()}원
                       </span>
@@ -2633,12 +2533,6 @@ const Payment = () => {
                       <span className="text-sm text-muted-foreground">총 할인 금액</span>
                       <span className="font-semibold text-primary">
                         {totalDiscount.toLocaleString()}원
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-sm text-muted-foreground">남은 포인트</span>
-                      <span className={`font-semibold ${userPoints - totalCost < 0 ? 'text-destructive' : ''}`}>
-                        {(userPoints - totalCost).toLocaleString()}원
                       </span>
                     </div>
                   </div>
@@ -2887,12 +2781,6 @@ const Payment = () => {
                           <div className="flex items-center gap-2 text-xs pl-[44px]">
                             <span className="text-muted-foreground">적립 가능 별:</span>
                             <span>⭐⭐⭐</span>
-                          </div>
-                        )}
-                        {storeId === "baskin" && (
-                          <div className="flex items-center gap-2 text-xs pl-[44px]">
-                            <span className="text-muted-foreground">보유 포인트:</span>
-                            <span className="font-semibold">1,500P</span>
                           </div>
                         )}
                       </div>

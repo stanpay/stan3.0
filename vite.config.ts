@@ -5,7 +5,7 @@ import path from "path";
 // https://vitejs.dev/config/
 export default defineConfig({
   server: {
-    host: "::",
+    host: true, // 모든 네트워크 인터페이스에서 접근 가능
     port: 8080,
   },
   plugins: [react()],

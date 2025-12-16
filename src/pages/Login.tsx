@@ -83,7 +83,7 @@ const Login = () => {
             Stan
           </h1>
           <p className="text-muted-foreground text-lg">
-            결제의 기준이 되다
+            할인의 기준이 되다
           </p>
         </div>
 

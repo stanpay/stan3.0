@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { ChevronRight, Gift, History, Settings, LogOut, Plus, Package } from "lucide-react";
+import { ChevronRight, Gift, History, Settings, LogOut, Package } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -17,7 +17,6 @@ const MyPage = () => {
   const [userName, setUserName] = useState<string>("사용자");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [points, setPoints] = useState<number>(15000);
   const [gifticonsCount, setGifticonsCount] = useState<number>(12);
   const [paymentCount, setPaymentCount] = useState<number>(45);
   const [sellingCount, setSellingCount] = useState<number>(8);
@@ -39,12 +38,11 @@ const MyPage = () => {
         // 프로필 정보 가져오기
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('points, gifticons_count, payment_count, selling_count')
+          .select('gifticons_count, payment_count, selling_count')
           .eq('id', session.user.id)
           .single();
 
         if (profile) {
-          setPoints(profile.points);
           setGifticonsCount(profile.gifticons_count);
           setPaymentCount(profile.payment_count);
           setSellingCount(profile.selling_count);
@@ -69,7 +67,6 @@ const MyPage = () => {
         setUserEmail("user@example.com");
         setUserName("사용자");
         setIsLoggedIn(false);
-        setPoints(15000);
         setGifticonsCount(12);
         setPaymentCount(45);
         setSellingCount(8);
@@ -83,12 +80,11 @@ const MyPage = () => {
         // 프로필 정보 가져오기
         supabase
           .from('profiles')
-          .select('points, gifticons_count, payment_count, selling_count')
+          .select('gifticons_count, payment_count, selling_count')
           .eq('id', session.user.id)
           .single()
           .then(({ data: profile }) => {
             if (profile) {
-              setPoints(profile.points);
               setGifticonsCount(profile.gifticons_count);
               setPaymentCount(profile.payment_count);
               setSellingCount(profile.selling_count);
@@ -111,7 +107,6 @@ const MyPage = () => {
   const menuItems = [
     { icon: Gift, label: "내 기프티콘", path: "/my-gifticons" },
     { icon: History, label: "결제 내역", path: "/history" },
-    { icon: Settings, label: "포인트/멤버십 관리", path: "/points-membership" },
     { icon: Settings, label: "결제수단 설정", path: "/payment-methods" },
     { icon: Settings, label: "설정", path: "/settings" },
   ];
@@ -149,19 +144,6 @@ const MyPage = () => {
             </div>
           </div>
 
-          {/* Points Balance */}
-          <div className="flex items-center justify-between py-4 border-y border-border my-4">
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">포인트 잔액</p>
-              <p className="text-2xl font-bold text-primary">
-                {points.toLocaleString()} P
-              </p>
-            </div>
-            <Button className="rounded-xl gap-2">
-              <Plus className="w-4 h-4" />
-              충전
-            </Button>
-          </div>
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-4 pt-4">

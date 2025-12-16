@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 .env
 *.md
+.cursor
 
 # Scripts and utilities
 scripts/

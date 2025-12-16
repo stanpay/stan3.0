@@ -14,7 +14,6 @@ import MyPage from "./pages/MyPage";
 import MyGifticons from "./pages/MyGifticons";
 import History from "./pages/History";
 import PaymentMethods from "./pages/PaymentMethods";
-import PointsMembership from "./pages/PointsMembership";
 import CallbackAuth from "./pages/CallbackAuth";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFail from "./pages/PaymentFail";
@@ -39,7 +38,6 @@ const App = () => (
           <Route path="/mypage" element={<ProtectedRoute><MyPage /></ProtectedRoute>} />
           <Route path="/my-gifticons" element={<ProtectedRoute><MyGifticons /></ProtectedRoute>} />
           <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-          <Route path="/points-membership" element={<ProtectedRoute><PointsMembership /></ProtectedRoute>} />
           <Route path="/payment-methods" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
           <Route path="/callback-auth" element={<CallbackAuth />} />
           <Route path="/payment-success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
