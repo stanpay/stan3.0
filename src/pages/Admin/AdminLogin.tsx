@@ -17,7 +17,6 @@ const AdminLogin = () => {
 
   useEffect(() => {
     let isMounted = true;
-    let subscription: { unsubscribe: () => void } | null = null;
 
     // 인증 상태 변경 감지
     const checkAdminSession = async (session: any) => {
@@ -45,7 +44,7 @@ const AdminLogin = () => {
     });
 
     // 인증 상태 변경 감지
-    subscription = supabase.auth.onAuthStateChange((event, session) => {
+    const authStateChangeResult = supabase.auth.onAuthStateChange((event, session) => {
       if (!isMounted) return;
       
       if (event === "SIGNED_IN" && session) {
@@ -54,10 +53,12 @@ const AdminLogin = () => {
         // 로그아웃 시 아무것도 하지 않음 (로그인 페이지에 머무름)
       }
     });
+    
+    const subscription = authStateChangeResult?.data?.subscription;
 
     return () => {
       isMounted = false;
-      if (subscription) {
+      if (subscription && typeof subscription.unsubscribe === 'function') {
         subscription.unsubscribe();
       }
     };

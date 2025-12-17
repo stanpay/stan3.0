@@ -11,6 +11,7 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
   const location = useLocation();
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isChecking, setIsChecking] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -31,38 +32,46 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
 
           if (sessionError || !fetchedSession) {
             console.log("세션이 없거나 에러:", sessionError?.message || "세션 없음");
-            if (isMounted) {
-              setIsAdmin(false);
-              setIsChecking(false);
-            }
-            return;
-          }
-          currentSession = fetchedSession;
-        }
-
-        if (!isMounted) return;
-
-        // 관리자 권한 확인 (타임아웃 없이)
-        const operator = await isOperator();
-
-        if (!isMounted) return;
-
-        console.log("관리자 권한 확인 결과:", operator);
-        if (isMounted) {
-          setIsAdmin(operator);
-          setIsChecking(false);
-        }
-      } catch (error: any) {
-        console.error("관리자 권한 확인 오류:", error);
         if (isMounted) {
           setIsAdmin(false);
           setIsChecking(false);
+          setIsAuthorized(false);
         }
+        return;
+      }
+        currentSession = fetchedSession;
+      }
+
+      if (!isMounted) return;
+
+      // 관리자 권한 확인 (타임아웃 없이)
+      const operator = await isOperator();
+
+      if (!isMounted) return;
+
+      console.log("관리자 권한 확인 결과:", operator);
+      if (isMounted) {
+        setIsAdmin(operator);
+        setIsChecking(false);
+        // 권한 확인이 완료된 후에만 인증 상태 설정
+        if (operator) {
+          setIsAuthorized(true);
+        } else {
+          setIsAuthorized(false);
+        }
+      }
+    } catch (error: any) {
+      console.error("관리자 권한 확인 오류:", error);
+      if (isMounted) {
+        setIsAdmin(false);
+        setIsChecking(false);
+        setIsAuthorized(false);
+      }
       }
     };
 
     // 인증 상태 변경 감지 (먼저 설정하여 INITIAL_SESSION 이벤트를 받음)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const authStateChangeResult = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
 
       console.log("인증 상태 변경:", event, session ? "세션 있음" : "세션 없음");
@@ -75,6 +84,7 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
           if (isMounted) {
             setIsAdmin(false);
             setIsChecking(false);
+            setIsAuthorized(false);
           }
         }
         return;
@@ -85,6 +95,7 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
         if (isMounted) {
           setIsAdmin(false);
           setIsChecking(false);
+          setIsAuthorized(false);
         }
         return;
       }
@@ -99,10 +110,13 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
           if (isMounted) {
             setIsAdmin(false);
             setIsChecking(false);
+            setIsAuthorized(false);
           }
         }
       }
     });
+    
+    const subscription = authStateChangeResult?.data?.subscription;
 
     // INITIAL_SESSION 이벤트가 오지 않을 경우를 대비한 폴백 (짧은 지연 후)
     timeoutId = setTimeout(() => {
@@ -115,12 +129,14 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
     return () => {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
-      subscription.unsubscribe();
+      if (subscription && typeof subscription.unsubscribe === 'function') {
+        subscription.unsubscribe();
+      }
     };
   }, []); // 한 번만 실행
 
-  // 확인 중이면 로딩 표시
-  if (isChecking) {
+  // 확인 중이거나 권한이 없으면 로딩 표시 (정보 유출 방지)
+  if (isChecking || !isAuthorized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -136,7 +152,7 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
     return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
   }
 
-  // 관리자면 페이지 표시
+  // 관리자이고 권한 확인이 완료된 경우에만 페이지 표시
   return <>{children}</>;
 };
 

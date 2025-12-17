@@ -27,6 +27,7 @@ interface ChatRoom {
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [activeTab, setActiveTab] = useState("gifticons");
   const [gifticons, setGifticons] = useState<UsedGifticon[]>([]);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
@@ -37,6 +38,47 @@ const AdminDashboard = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedChatRoom, setSelectedChatRoom] = useState<string | null>(null);
   const [readChatRooms, setReadChatRooms] = useState<Map<string | null, string>>(new Map()); // user_id -> read_at timestamp
+
+  // 초기 권한 확인 (이중 보안)
+  useEffect(() => {
+    let isMounted = true;
+    
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!isMounted) return;
+        
+        if (!session) {
+          navigate("/admin/login", { replace: true });
+          return;
+        }
+
+        // 관리자 권한 재확인
+        const { isOperator } = await import("@/lib/admin");
+        const operator = await isOperator();
+        
+        if (!isMounted) return;
+        
+        if (!operator) {
+          navigate("/admin/login", { replace: true });
+          return;
+        }
+
+        setIsAuthorized(true);
+      } catch (error) {
+        console.error("권한 확인 오류:", error);
+        if (isMounted) {
+          navigate("/admin/login", { replace: true });
+        }
+      }
+    };
+
+    checkAuth();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate]);
 
   // 기프티콘 데이터 로드
   const loadGifticons = async (isMountedRef?: { current: boolean }) => {
@@ -494,6 +536,18 @@ const AdminDashboard = () => {
       isMounted = false;
     };
   }, [selectedChatRoom]);
+
+  // 권한 확인 전에는 아무것도 렌더링하지 않음 (정보 유출 방지)
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+          <p className="mt-4 text-muted-foreground">권한 확인 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
