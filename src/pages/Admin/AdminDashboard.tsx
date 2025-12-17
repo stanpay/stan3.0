@@ -36,7 +36,7 @@ const AdminDashboard = () => {
   const [messageSearch, setMessageSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedChatRoom, setSelectedChatRoom] = useState<string | null>(null);
-  const [readChatRooms, setReadChatRooms] = useState<Set<string | null>>(new Set());
+  const [readChatRooms, setReadChatRooms] = useState<Map<string | null, string>>(new Map()); // user_id -> read_at timestamp
 
   // 기프티콘 데이터 로드
   const loadGifticons = async () => {
@@ -96,6 +96,32 @@ const AdminDashboard = () => {
     }
   };
 
+  // 읽음 상태 로드
+  const loadReadStatus = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("admin_chat_reads")
+        .select("user_id, read_at")
+        .eq("admin_id", user.id);
+
+      if (error) {
+        console.error("읽음 상태 로드 오류:", error);
+        return;
+      }
+
+      const readMap = new Map<string | null, string>();
+      data?.forEach((item) => {
+        readMap.set(item.user_id, item.read_at);
+      });
+      setReadChatRooms(readMap);
+    } catch (error) {
+      console.error("읽음 상태 로드 오류:", error);
+    }
+  };
+
   // 채팅 메시지 데이터 로드
   const loadMessages = async () => {
     setIsLoadingMessages(true);
@@ -145,6 +171,7 @@ const AdminDashboard = () => {
       loadGifticons();
     } else if (activeTab === "messages") {
       loadMessages();
+      loadReadStatus();
     }
   }, [activeTab, statusFilter]);
 
@@ -288,10 +315,21 @@ const AdminDashboard = () => {
       }
     });
     
-    // 읽지 않은 메시지 수 계산
+    // 읽지 않은 메시지 수 계산 (읽음 시간 이후의 메시지만 카운트)
     roomMap.forEach((room) => {
-      const isRead = readChatRooms.has(room.user_id);
-      room.unreadCount = isRead ? 0 : room.messageCount;
+      const readAt = readChatRooms.get(room.user_id);
+      if (!readAt) {
+        // 읽지 않은 경우 전체 메시지 수
+        room.unreadCount = room.messageCount;
+      } else {
+        // 읽음 시간 이후의 메시지만 카운트
+        const readTime = new Date(readAt).getTime();
+        const unreadMessages = messages.filter((msg) => {
+          if (msg.user_id !== room.user_id) return false;
+          return new Date(msg.created_at).getTime() > readTime;
+        });
+        room.unreadCount = unreadMessages.length;
+      }
     });
     
     return Array.from(roomMap.values()).sort(
@@ -321,15 +359,97 @@ const AdminDashboard = () => {
     }
   }, [chatRooms, selectedChatRoom]);
 
-  // 채팅방 선택 시 읽음 처리
+  // 채팅방 선택 시 읽음 처리 (DB에 저장)
   useEffect(() => {
-    if (selectedChatRoom !== null) {
-      setReadChatRooms((prev) => {
-        const newSet = new Set(prev);
-        newSet.add(selectedChatRoom);
-        return newSet;
-      });
-    }
+    const markAsRead = async () => {
+      if (selectedChatRoom === null) {
+        // 익명 사용자 채팅방 처리
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+
+          // user_id가 null인 경우 기존 레코드 확인 후 업데이트 또는 삽입
+          const { data: existing } = await supabase
+            .from("admin_chat_reads")
+            .select("id")
+            .eq("admin_id", user.id)
+            .is("user_id", null)
+            .single();
+
+          if (existing) {
+            // 기존 레코드 업데이트
+            const { error } = await supabase
+              .from("admin_chat_reads")
+              .update({ read_at: new Date().toISOString() })
+              .eq("id", existing.id);
+
+            if (error) {
+              console.error("읽음 상태 저장 오류:", error);
+              return;
+            }
+          } else {
+            // 새 레코드 삽입
+            const { error } = await supabase
+              .from("admin_chat_reads")
+              .insert({
+                admin_id: user.id,
+                user_id: null,
+                read_at: new Date().toISOString(),
+              });
+
+            if (error) {
+              console.error("읽음 상태 저장 오류:", error);
+              return;
+            }
+          }
+
+          // 로컬 상태 업데이트
+          setReadChatRooms((prev) => {
+            const newMap = new Map(prev);
+            newMap.set(null, new Date().toISOString());
+            return newMap;
+          });
+        } catch (error) {
+          console.error("읽음 처리 오류:", error);
+        }
+        return;
+      }
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // DB에 읽음 상태 저장 (UPSERT)
+        const { error } = await supabase
+          .from("admin_chat_reads")
+          .upsert(
+            {
+              admin_id: user.id,
+              user_id: selectedChatRoom,
+              read_at: new Date().toISOString(),
+            },
+            {
+              onConflict: "admin_id,user_id",
+            }
+          );
+
+        if (error) {
+          console.error("읽음 상태 저장 오류:", error);
+          return;
+        }
+
+        // 로컬 상태 업데이트
+        setReadChatRooms((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(selectedChatRoom, new Date().toISOString());
+          return newMap;
+        });
+      } catch (error) {
+        console.error("읽음 처리 오류:", error);
+      }
+    };
+
+    markAsRead();
   }, [selectedChatRoom]);
 
   return (

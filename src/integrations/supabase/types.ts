@@ -14,8 +14,130 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_chat_reads: {
+        Row: {
+          admin_id: string
+          created_at: string
+          id: string
+          read_at: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          admin_id: string
+          created_at?: string
+          id?: string
+          read_at?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          admin_id?: string
+          created_at?: string
+          id?: string
+          read_at?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_chat_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_users: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string
+          id: string
+          is_active: boolean
+          last_login_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email: string
+          id?: string
+          is_active?: boolean
+          last_login_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          id?: string
+          is_active?: boolean
+          last_login_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      franchise_payment_methods: {
+        Row: {
+          created_at: string | null
+          franchise_id: string
+          id: string
+          method_name: string
+          method_type: string | null
+          rate: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          franchise_id: string
+          id?: string
+          method_name: string
+          method_type?: string | null
+          rate?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          franchise_id?: string
+          id?: string
+          method_name?: string
+          method_type?: string | null
+          rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "franchise_payment_methods_franchise_id_fkey"
+            columns: ["franchise_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      franchises: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       gifticons: {
         Row: {
+          barcode: string | null
           brand: string
           created_at: string | null
           expiry_date: string
@@ -29,6 +151,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          barcode?: string | null
           brand: string
           created_at?: string | null
           expiry_date: string
@@ -42,6 +165,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          barcode?: string | null
           brand?: string
           created_at?: string | null
           expiry_date?: string
@@ -125,6 +249,59 @@ export type Database = {
         }
         Relationships: []
       }
+      stores: {
+        Row: {
+          created_at: string | null
+          franchise_id: string
+          free_parking: boolean | null
+          gifticon_available: boolean | null
+          id: string
+          kakao_place_id: string | null
+          local_currency_available: boolean | null
+          local_currency_discount_rate: number | null
+          name: string
+          parking_available: boolean | null
+          parking_size: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          franchise_id: string
+          free_parking?: boolean | null
+          gifticon_available?: boolean | null
+          id?: string
+          kakao_place_id?: string | null
+          local_currency_available?: boolean | null
+          local_currency_discount_rate?: number | null
+          name: string
+          parking_available?: boolean | null
+          parking_size?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          franchise_id?: string
+          free_parking?: boolean | null
+          gifticon_available?: boolean | null
+          id?: string
+          kakao_place_id?: string | null
+          local_currency_available?: boolean | null
+          local_currency_discount_rate?: number | null
+          name?: string
+          parking_available?: boolean | null
+          parking_size?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stores_franchise_id_fkey"
+            columns: ["franchise_id"]
+            isOneToOne: false
+            referencedRelation: "franchises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_messages: {
         Row: {
           created_at: string
@@ -188,7 +365,7 @@ export type Database = {
           reserved_by?: string | null
           sale_price: number
           seller_id: string
-          status: string
+          status?: string
           updated_at?: string | null
         }
         Update: {
@@ -315,7 +492,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_expired_reservations: {
+        Args: never
+        Returns: {
+          cleaned_count: number
+        }[]
+      }
+      is_admin: { Args: never; Returns: boolean }
+      is_admin_user: { Args: never; Returns: boolean }
+      mark_expired_gifticons: {
+        Args: never
+        Returns: {
+          expired_count: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
