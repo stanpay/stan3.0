@@ -19,9 +19,9 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
     let hasChecked = false;
 
     const checkAdmin = async (session?: any): Promise<void> => {
-      if (hasChecked) return;
-      hasChecked = true;
-
+      // 세션이 명시적으로 전달되지 않았을 때만 hasChecked 체크
+      if (!session && hasChecked) return;
+      
       try {
         // 세션 파라미터가 없으면 직접 확인
         let currentSession = session;
@@ -32,19 +32,25 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
 
           if (sessionError || !fetchedSession) {
             console.log("세션이 없거나 에러:", sessionError?.message || "세션 없음");
-        if (isMounted) {
-          setIsAdmin(false);
-          setIsChecking(false);
-          setIsAuthorized(false);
+            // 세션이 없을 때는 hasChecked를 설정하지 않아서 나중에 재확인 가능하도록 함
+            if (isMounted) {
+              setIsAdmin(false);
+              setIsChecking(false);
+              setIsAuthorized(false);
+            }
+            return;
+          }
+          currentSession = fetchedSession;
+          hasChecked = true; // 세션을 찾았을 때만 체크 플래그 설정
+        } else {
+          // 세션이 전달된 경우 hasChecked 리셋
+          hasChecked = false;
         }
-        return;
-      }
-        currentSession = fetchedSession;
-      }
 
       if (!isMounted) return;
 
       // 관리자 권한 확인 (타임아웃 없이)
+      hasChecked = true; // 권한 확인 시작 전에 체크 플래그 설정
       const operator = await isOperator();
 
       if (!isMounted) return;
@@ -67,8 +73,8 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
         setIsChecking(false);
         setIsAuthorized(false);
       }
-      }
-    };
+    }
+  };
 
     // 인증 상태 변경 감지 (먼저 설정하여 INITIAL_SESSION 이벤트를 받음)
     const authStateChangeResult = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -135,8 +141,8 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
     };
   }, []); // 한 번만 실행
 
-  // 확인 중이거나 권한이 없으면 로딩 표시 (정보 유출 방지)
-  if (isChecking || !isAuthorized) {
+  // 확인 중이고 아직 권한 확인이 완료되지 않았으면 로딩 표시 (정보 유출 방지)
+  if (isChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -147,9 +153,21 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
     );
   }
 
-  // 관리자가 아니면 로그인 페이지로 리다이렉트
+  // 권한 확인이 완료되었고 관리자가 아니면 로그인 페이지로 리다이렉트
   if (!isAdmin) {
     return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+  }
+
+  // 권한 확인이 완료되었지만 아직 인증되지 않았으면 로딩 표시
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+          <p className="mt-4 text-muted-foreground">권한 확인 중...</p>
+        </div>
+      </div>
+    );
   }
 
   // 관리자이고 권한 확인이 완료된 경우에만 페이지 표시
