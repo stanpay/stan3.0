@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { ChevronRight, Gift, History, Settings, LogOut, Package } from "lucide-react";
+import { ChevronRight, History, Settings, LogOut, Package, Zap, Ticket } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -17,9 +17,7 @@ const MyPage = () => {
   const [userName, setUserName] = useState<string>("사용자");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [gifticonsCount, setGifticonsCount] = useState<number>(12);
-  const [paymentCount, setPaymentCount] = useState<number>(45);
-  const [sellingCount, setSellingCount] = useState<number>(8);
+  const [totalDiscount, setTotalDiscount] = useState<number>(0);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   useEffect(() => {
@@ -35,17 +33,17 @@ const MyPage = () => {
         setUserName(displayName);
         setIsLoggedIn(true);
 
-        // 프로필 정보 가져오기
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('gifticons_count, payment_count, selling_count')
-          .eq('id', session.user.id)
-          .single();
+        // 총 할인 금액 계산 (구매한 기프티콘들의 원가 합계)
+        const { data: gifticons, error: gifticonsError } = await supabase
+          .from('gifticons')
+          .select('original_price')
+          .eq('user_id', session.user.id);
 
-        if (profile) {
-          setGifticonsCount(profile.gifticons_count);
-          setPaymentCount(profile.payment_count);
-          setSellingCount(profile.selling_count);
+        if (gifticons && !gifticonsError) {
+          // 사용자가 구매한 기프티콘들의 원가 합계를 할인 금액으로 계산
+          // 실제로는 원가 - 실제 결제 금액이지만, 여기서는 원가 합계를 표시
+          const discount = gifticons.reduce((sum, g) => sum + (g.original_price || 0), 0);
+          setTotalDiscount(discount);
         }
 
         // 운영자 확인
@@ -67,9 +65,7 @@ const MyPage = () => {
         setUserEmail("user@example.com");
         setUserName("사용자");
         setIsLoggedIn(false);
-        setGifticonsCount(12);
-        setPaymentCount(45);
-        setSellingCount(8);
+        setTotalDiscount(0);
       } else if (session) {
         const email = session.user.email || "";
         setUserEmail(email);
@@ -77,17 +73,15 @@ const MyPage = () => {
         setUserName(displayName);
         setIsLoggedIn(true);
         
-        // 프로필 정보 가져오기
+        // 총 할인 금액 계산
         supabase
-          .from('profiles')
-          .select('gifticons_count, payment_count, selling_count')
-          .eq('id', session.user.id)
-          .single()
-          .then(({ data: profile }) => {
-            if (profile) {
-              setGifticonsCount(profile.gifticons_count);
-              setPaymentCount(profile.payment_count);
-              setSellingCount(profile.selling_count);
+          .from('gifticons')
+          .select('original_price')
+          .eq('user_id', session.user.id)
+          .then(({ data: gifticons, error: gifticonsError }) => {
+            if (gifticons && !gifticonsError) {
+              const discount = gifticons.reduce((sum, g) => sum + (g.original_price || 0), 0);
+              setTotalDiscount(discount);
             }
           });
       }
@@ -97,17 +91,39 @@ const MyPage = () => {
   }, [navigate]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    toast({
-      title: "로그아웃 되었습니다",
-    });
-    navigate("/");
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error("로그아웃 오류:", error);
+        toast({
+          title: "로그아웃 실패",
+          description: error.message || "로그아웃 중 오류가 발생했습니다.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      toast({
+        title: "로그아웃 되었습니다",
+      });
+      
+      // 세션이 완전히 삭제된 후에만 navigate
+      navigate("/", { replace: true });
+    } catch (error: any) {
+      console.error("로그아웃 처리 오류:", error);
+      toast({
+        title: "로그아웃 실패",
+        description: error.message || "로그아웃 처리 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
   };
 
   const menuItems = [
-    { icon: Gift, label: "내 기프티콘", path: "/my-gifticons" },
     { icon: History, label: "결제 내역", path: "/history" },
-    { icon: Settings, label: "결제수단 설정", path: "/payment-methods" },
+    { icon: Zap, label: "원터치 결제", path: "/one-touch-payment" },
+    { icon: Ticket, label: "할인쿠폰", path: "/discount-coupon" },
+    { icon: Settings, label: "현장 결제 수단", path: "/payment-methods" },
     { icon: Settings, label: "설정", path: "/settings" },
   ];
 
@@ -123,12 +139,6 @@ const MyPage = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <header className="sticky top-0 z-40 bg-card border-b border-border">
-        <div className="max-w-md mx-auto px-4 py-4">
-          <h1 className="text-xl font-bold">마이페이지</h1>
-        </div>
-      </header>
-
       <main className="max-w-md mx-auto px-4 py-6">
         {/* Profile Section */}
         <Card className="p-6 mb-6 rounded-2xl border-border/50">
@@ -144,27 +154,11 @@ const MyPage = () => {
             </div>
           </div>
 
-
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 pt-4">
-            <Link to="/my-gifticons" className="text-center cursor-pointer hover:opacity-80 transition-opacity">
-              <p className="text-2xl font-bold text-primary mb-1">
-                {gifticonsCount}
-              </p>
-              <p className="text-xs text-muted-foreground">보유 기프티콘</p>
-            </Link>
-            <Link to="/history" className="text-center border-l border-r border-border cursor-pointer hover:opacity-80 transition-opacity">
-              <p className="text-2xl font-bold text-primary mb-1">
-                {paymentCount}
-              </p>
-              <p className="text-xs text-muted-foreground">결제 횟수</p>
-            </Link>
-            <Link to="/my-gifticons?filter=사용가능&subFilter=판매중" className="text-center cursor-pointer hover:opacity-80 transition-opacity">
-              <p className="text-2xl font-bold text-primary mb-1">
-                {sellingCount}
-              </p>
-              <p className="text-xs text-muted-foreground">판매 중</p>
-            </Link>
+          {/* Total Discount */}
+          <div className="pt-4 text-center">
+            <p className="text-2xl font-bold text-primary">
+              총 {totalDiscount.toLocaleString()}원 할인받았어요!
+            </p>
           </div>
         </Card>
 
@@ -194,9 +188,6 @@ const MyPage = () => {
         {/* Admin Menu Items */}
         {isAdmin && (
           <div className="space-y-2 mb-6">
-            <div className="px-2 py-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase">관리자</p>
-            </div>
             {adminMenuItems.map((item) => {
               const Icon = item.icon;
               return (

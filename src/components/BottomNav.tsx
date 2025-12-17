@@ -1,4 +1,4 @@
-import { Home, Gift, User } from "lucide-react";
+import { Home, User, Gift } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -7,7 +7,7 @@ const BottomNav = () => {
 
   const navItems = [
     { icon: Home, label: "결제", path: "/main" },
-    { icon: Gift, label: "기프티콘", path: "/marketplace" },
+    { icon: Gift, label: "내 기프티콘", path: "/my-gifticons" },
     { icon: User, label: "마이페이지", path: "/mypage" },
   ];
 

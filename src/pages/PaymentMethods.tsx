@@ -111,13 +111,13 @@ const PaymentMethods = () => {
           <Link to="/mypage">
             <ChevronLeft className="w-6 h-6" />
           </Link>
-          <h1 className="text-xl font-bold">결제수단 설정</h1>
+          <h1 className="text-xl font-bold">현장 결제 수단</h1>
         </div>
       </header>
 
       <main className="max-w-md mx-auto px-4 py-6">
         <p className="text-sm text-muted-foreground mb-4">
-          사용할 결제수단을 선택해주세요
+          현장에서 사용할 결제수단을 선택해주세요
         </p>
 
         {!isLoggedIn && (

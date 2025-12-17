@@ -36,7 +36,6 @@ const ChatSupport = () => {
       "/": "로그인",
       "/main": "메인",
       "/location": "위치 설정",
-      "/marketplace": "마켓플레이스",
       "/sell": "판매하기",
       "/payment": "결제",
       "/mypage": "마이페이지",

@@ -319,16 +319,6 @@ const MyGifticons = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20 overflow-x-hidden">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-card border-b border-border">
-        <div className="max-w-md mx-auto px-4 py-4 flex items-center gap-3">
-          <Link to="/mypage">
-            <ChevronLeft className="w-6 h-6" />
-          </Link>
-          <h1 className="text-xl font-bold">내 기프티콘</h1>
-        </div>
-      </header>
-
       {/* Filter Tabs */}
       <div className="max-w-md mx-auto px-4 py-4 border-b border-border">
         <div className="flex items-center gap-2 overflow-x-auto">

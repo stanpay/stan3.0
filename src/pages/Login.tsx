@@ -9,15 +9,28 @@ const Login = () => {
 
   useEffect(() => {
     // Check if user is already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      // 세션이 있고 유효하면 메인으로 이동
+      if (session && !error) {
         navigate("/main");
       }
+      // 세션이 없거나 에러가 있으면 로그인 페이지에 머물기 (아무것도 하지 않음)
     });
 
     // Listen for auth state changes (OAuth callback handling)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Login 페이지 인증 상태 변경:", event, session ? "세션 있음" : "세션 없음");
+      
+      if (event === "SIGNED_OUT" || (!session && event !== "INITIAL_SESSION")) {
+        // 로그아웃 이벤트: 루트에 머물도록 함 (이미 루트에 있으면 아무것도 하지 않음)
+        if (window.location.pathname !== "/") {
+          navigate("/", { replace: true });
+        }
+      } else if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
+        // 로그인 이벤트: 메인으로 이동
+        navigate("/main");
+      } else if (event === "INITIAL_SESSION" && session) {
+        // 초기 세션 로드 시 세션이 있으면 메인으로 이동
         navigate("/main");
       }
     });
@@ -29,23 +42,39 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // 배포 환경 URL 확인
-      // 우선순위: 1) VITE_SITE_URL 환경 변수, 2) window.location.origin
-      let siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+      // localhost 환경 감지
+      const currentOrigin = window.location.origin;
+      const isLocalhost = currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1');
       
-      // localhost가 아닌 경우 (배포 환경) 확실하게 처리
-      if (!siteUrl.includes('localhost') && !siteUrl.includes('127.0.0.1')) {
-        // 배포 환경에서 https로 강제 (Vercel은 자동으로 https)
+      // localhost인 경우 무조건 현재 브라우저의 origin 사용 (환경 변수 무시)
+      // 배포 환경인 경우 환경 변수 또는 현재 origin 사용
+      let siteUrl: string;
+      if (isLocalhost) {
+        // localhost에서는 항상 현재 브라우저 URL 사용
+        siteUrl = currentOrigin;
+        console.log('🔗 [localhost 감지] 환경 변수 무시하고 현재 브라우저 URL 사용');
+      } else {
+        // 배포 환경: 환경 변수 우선, 없으면 현재 origin
+        siteUrl = import.meta.env.VITE_SITE_URL || currentOrigin;
+        
+        // https 보장
         if (!siteUrl.startsWith('http')) {
           siteUrl = `https://${siteUrl}`;
-        } else if (siteUrl.startsWith('http://') && !siteUrl.includes('localhost')) {
+        } else if (siteUrl.startsWith('http://')) {
           siteUrl = siteUrl.replace('http://', 'https://');
         }
       }
       
+      // redirectTo URL 생성
       const redirectUrl = `${siteUrl}/main`;
       
-      console.log('🔗 카카오 로그인 리다이렉트 URL:', redirectUrl);
+      // 상세 로깅
+      console.log('🔍 [OAuth 설정 확인]');
+      console.log('  - 현재 브라우저 origin:', currentOrigin);
+      console.log('  - 환경 변수 VITE_SITE_URL:', import.meta.env.VITE_SITE_URL || '(없음)');
+      console.log('  - 최종 사용 siteUrl:', siteUrl);
+      console.log('  - redirectTo URL:', redirectUrl);
+      console.log('  - localhost 여부:', isLocalhost);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'kakao',
@@ -53,6 +82,23 @@ const Login = () => {
           redirectTo: redirectUrl,
         },
       });
+      
+      // Supabase가 생성한 OAuth URL 확인
+      if (data?.url) {
+        console.log('🔗 [Supabase 생성 OAuth URL]:', data.url);
+        try {
+          const urlObj = new URL(data.url);
+          const redirectToParam = urlObj.searchParams.get('redirect_to');
+          console.log('  - URL의 redirect_to 파라미터:', redirectToParam || '(없음)');
+          
+          if (isLocalhost && redirectToParam && !redirectToParam.includes('localhost')) {
+            console.warn('⚠️ [경고] redirectTo가 localhost가 아닙니다!');
+            console.warn('  - Supabase 대시보드의 Site URL을 localhost로 설정해주세요.');
+          }
+        } catch (e) {
+          console.error('URL 파싱 오류:', e);
+        }
+      }
 
       if (error) {
         console.error("카카오 로그인 오류:", error);

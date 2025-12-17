@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Gift, CreditCard, Loader2 } from "lucide-react";
+import { ArrowLeft, Gift, CreditCard, Loader2, Ticket, ChevronDown, ChevronUp } from "lucide-react";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
@@ -25,6 +25,151 @@ interface SelectedGifticon {
   sale_price: number;
   reservedId: string; // 대기중인 기프티콘 ID (단일 선택)
 }
+
+interface Coupon {
+  id: string;
+  name: string;
+  description: string;
+  discount_type: 'percent' | 'fixed';
+  discount_value: number;
+  min_purchase_amount: number | null;
+  expiry_date: string;
+  status: 'available' | 'used' | 'expired';
+}
+
+// 숫자를 한글 숫자 문자열로 변환하는 함수 (1~9999)
+// includeOne: true면 1을 "일"로 표시, false면 생략 (기본값: false)
+const formatKoreanNumber = (num: number, includeOne: boolean = false): string => {
+  if (num === 0) return "";
+  
+  const koreanNumbers = ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"];
+  let result = "";
+  
+  // 천 단위
+  if (num >= 1000) {
+    const cheon = Math.floor(num / 1000);
+    if (cheon > 0) {
+      if (cheon === 1) {
+        result += "천";
+      } else {
+        result += koreanNumbers[cheon] + "천";
+      }
+    }
+    num = num % 1000;
+  }
+  
+  // 백 단위
+  if (num >= 100) {
+    const baek = Math.floor(num / 100);
+    if (baek > 0) {
+      if (baek === 1) {
+        result += "백";
+      } else {
+        result += koreanNumbers[baek] + "백";
+      }
+    }
+    num = num % 100;
+  }
+  
+  // 십 단위
+  if (num >= 10) {
+    const sip = Math.floor(num / 10);
+    if (sip > 0) {
+      if (sip === 1) {
+        result += "십";
+      } else {
+        result += koreanNumbers[sip] + "십";
+      }
+    }
+    num = num % 10;
+  }
+  
+  // 일 단위
+  if (num > 0) {
+    result += koreanNumbers[num];
+  }
+  
+  // 전체 숫자가 1이고 includeOne이 true면 "일" 반환
+  if (result === "" && includeOne) {
+    return "일";
+  }
+  
+  return result;
+};
+
+// 숫자를 한글 금액으로 변환하는 함수
+const formatToKoreanCurrency = (amount: number): string => {
+  if (amount === 0) return "";
+  
+  let result = "";
+  let remaining = amount;
+  
+  // 억 단위 처리
+  if (remaining >= 100000000) {
+    const eok = Math.floor(remaining / 100000000);
+    if (eok > 0) {
+      const eokStr = formatKoreanNumber(eok, true); // 억 단위는 1도 "일"로 표시
+      result += eokStr + "억";
+    }
+    remaining = remaining % 100000000;
+  }
+  
+  // 만 단위 처리
+  if (remaining >= 10000) {
+    const man = Math.floor(remaining / 10000);
+    if (man > 0) {
+      const manStr = formatKoreanNumber(man, true); // 만 단위는 1도 "일"로 표시
+      result += manStr + "만";
+    }
+    remaining = remaining % 10000;
+  }
+  
+  // 천 단위 처리
+  if (remaining >= 1000) {
+    const cheon = Math.floor(remaining / 1000);
+    if (cheon > 0) {
+      const cheonStr = formatKoreanNumber(cheon);
+      result += cheonStr + "천";
+    }
+    remaining = remaining % 1000;
+  }
+  
+  // 백 단위 처리
+  if (remaining >= 100) {
+    const baek = Math.floor(remaining / 100);
+    if (baek > 0) {
+      const baekStr = formatKoreanNumber(baek);
+      result += baekStr + "백";
+    }
+    remaining = remaining % 100;
+  }
+  
+  // 십 단위 처리
+  if (remaining >= 10) {
+    const sip = Math.floor(remaining / 10);
+    if (sip > 0) {
+      const sipStr = formatKoreanNumber(sip);
+      result += sipStr + "십";
+    }
+    remaining = remaining % 10;
+  }
+  
+  // 일 단위 처리
+  if (remaining > 0) {
+    const koreanNumbers = ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"];
+    result += koreanNumbers[remaining];
+  }
+  
+  return result + "원";
+};
+
+// 숫자에 콤마 추가
+const formatNumberWithCommas = (value: string | number | null): string => {
+  if (value === null || value === "") return "";
+  const numStr = value.toString().replace(/,/g, "");
+  if (numStr === "") return "";
+  return parseInt(numStr, 10).toLocaleString("ko-KR");
+};
 
 const Payment = () => {
   const { storeId } = useParams();
@@ -80,6 +225,8 @@ const Payment = () => {
   const [isWidgetRendered, setIsWidgetRendered] = useState<boolean>(false); // 위젯 렌더링 상태
   const widgetInstanceRef = useRef<any>(null); // 위젯 인스턴스 캐싱
   const [remainingTime, setRemainingTime] = useState<number>(60); // Step 1 타이머 (초 단위)
+  const [availableCoupons, setAvailableCoupons] = useState<Coupon[]>([]); // 사용 가능한 할인쿠폰 목록
+  const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null); // 선택된 할인쿠폰
 
   // 기프티콘 할인율 중 최대값 계산
   const maxGifticonDiscount = useMemo(() => {
@@ -596,6 +743,116 @@ const Payment = () => {
 
   // 이전 로그인 상태를 추적하기 위한 ref 사용
   const prevSessionRef = useMemo(() => ({ current: null as any }), []);
+
+  // 총 선택한 금액 계산 (결제 완료된 기프티콘 제외, 할인쿠폰 적용 전)
+  const totalCostBeforeCoupon = Array.from(selectedGifticons.values())
+    .reduce((sum, item) => {
+      // 이미 결제 완료된 기프티콘은 제외
+      if (completedPurchases.has(item.reservedId)) {
+        return sum;
+      }
+      return sum + item.sale_price;
+    }, 0);
+
+  // 할인쿠폰 로드 및 자동 최대 할인 적용
+  useEffect(() => {
+    const loadCoupons = async () => {
+      if (!isLoggedIn) return;
+      
+      try {
+        // 예시 쿠폰 데이터 (실제로는 DB에서 조회)
+        const now = new Date();
+        const exampleCoupons: Coupon[] = [
+          {
+            id: '1',
+            name: '신규 가입 쿠폰',
+            description: '첫 구매 시 10% 할인',
+            discount_type: 'percent',
+            discount_value: 10,
+            min_purchase_amount: 10000,
+            expiry_date: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            status: 'available',
+          },
+          {
+            id: '2',
+            name: '생일 축하 쿠폰',
+            description: '5,000원 할인',
+            discount_type: 'fixed',
+            discount_value: 5000,
+            min_purchase_amount: 20000,
+            expiry_date: new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+            status: 'available',
+          },
+          {
+            id: '3',
+            name: '이벤트 쿠폰',
+            description: '15% 할인',
+            discount_type: 'percent',
+            discount_value: 15,
+            min_purchase_amount: 30000,
+            expiry_date: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            status: 'available',
+          },
+        ];
+
+        // 사용 가능한 쿠폰만 필터링
+        const available = exampleCoupons.filter(c => {
+          const expiryDate = new Date(c.expiry_date);
+          return expiryDate >= now && c.status === 'available';
+        });
+
+        setAvailableCoupons(available);
+      } catch (error) {
+        console.error("할인쿠폰 로딩 오류:", error);
+      }
+    };
+
+    if (isLoggedIn) {
+      loadCoupons();
+    }
+  }, [isLoggedIn]);
+
+  // 자동으로 최대 할인 쿠폰 선택
+  useEffect(() => {
+    if (availableCoupons.length === 0 || totalCostBeforeCoupon === 0) {
+      setSelectedCoupon(null);
+      return;
+    }
+
+    // 사용 가능한 쿠폰 중에서 최대 할인 금액을 계산하여 선택
+    let bestCoupon: Coupon | null = null;
+    let maxDiscount = 0;
+
+    availableCoupons.forEach(coupon => {
+      // 최소 구매 금액 체크
+      if (coupon.min_purchase_amount && totalCostBeforeCoupon < coupon.min_purchase_amount) {
+        return;
+      }
+
+      // 만료일 체크
+      const now = new Date();
+      const expiryDate = new Date(coupon.expiry_date);
+      if (expiryDate < now) {
+        return;
+      }
+
+      // 할인 금액 계산
+      let discount = 0;
+      if (coupon.discount_type === 'percent') {
+        discount = Math.floor(totalCostBeforeCoupon * (coupon.discount_value / 100));
+      } else {
+        discount = coupon.discount_value;
+      }
+
+      // 최대 할인 금액보다 크면 선택
+      if (discount > maxDiscount) {
+        maxDiscount = discount;
+        bestCoupon = coupon;
+      }
+    });
+
+    setSelectedCoupon(bestCoupon);
+  }, [availableCoupons, totalCostBeforeCoupon]);
 
   // 로그인 상태 확인
   useEffect(() => {
@@ -1791,15 +2048,32 @@ const Payment = () => {
   };
 
 
-  // 총 선택한 금액 계산 (결제 완료된 기프티콘 제외)
-  const totalCost = Array.from(selectedGifticons.values())
-    .reduce((sum, item) => {
-      // 이미 결제 완료된 기프티콘은 제외
-      if (completedPurchases.has(item.reservedId)) {
-        return sum;
-      }
-      return sum + item.sale_price;
-    }, 0);
+  // 할인쿠폰 할인 금액 계산 (totalCostBeforeCoupon 사용하여 순환 의존성 해결)
+  const couponDiscount = useMemo(() => {
+    if (!selectedCoupon || totalCostBeforeCoupon === 0) return 0;
+    
+    // 최소 구매 금액 체크
+    if (selectedCoupon.min_purchase_amount && totalCostBeforeCoupon < selectedCoupon.min_purchase_amount) {
+      return 0;
+    }
+    
+    // 만료일 체크
+    const now = new Date();
+    const expiryDate = new Date(selectedCoupon.expiry_date);
+    if (expiryDate < now) {
+      return 0;
+    }
+    
+    // 할인 금액 계산
+    if (selectedCoupon.discount_type === 'percent') {
+      return Math.floor(totalCostBeforeCoupon * (selectedCoupon.discount_value / 100));
+    } else {
+      return selectedCoupon.discount_value;
+    }
+  }, [selectedCoupon, totalCostBeforeCoupon]);
+
+  // 할인쿠폰 적용 후 총 구매 금액
+  const totalCost = Math.max(0, totalCostBeforeCoupon - couponDiscount);
 
   // 총 기프티콘 금액권 계산 (original_price 합계)
   const totalOriginalPrice = Array.from(selectedGifticons.values())
@@ -1813,7 +2087,7 @@ const Payment = () => {
       return sum;
     }, 0);
 
-  // 총 할인 금액 계산
+  // 총 할인 금액 계산 (기프티콘 할인 + 할인쿠폰 할인)
   const totalDiscount = Array.from(selectedGifticons.values())
     .reduce((sum, item) => {
       // 자동선택 모드에서는 autoSelectedGifticons에서 찾기
@@ -1824,7 +2098,7 @@ const Payment = () => {
         return sum + discountPerItem;
       }
       return sum;
-    }, 0);
+    }, 0) + couponDiscount;
 
   const handlePayment = async () => {
     // 선택한 기프티콘이 없으면 바로 Step 2로 이동
@@ -2386,25 +2660,37 @@ const Payment = () => {
                 {/* 가격 입력창 */}
                 <div className="space-y-2 mb-4">
                   <label className="text-sm font-medium">결제할 금액 입력 (선택사항)</label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      placeholder="금액을 입력하세요 (원)"
-                      value={inputBudget ?? ""}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (value === "") {
-                          setInputBudget(null);
-                        } else {
-                          const numValue = parseInt(value, 10);
-                          if (!isNaN(numValue) && numValue > 0) {
-                            setInputBudget(numValue);
+                  <div className="flex gap-2 items-center">
+                    <div className="flex-1 relative">
+                      <Input
+                        type="text"
+                        placeholder="금액을 입력하세요 (원)"
+                        value={inputBudget !== null ? formatNumberWithCommas(inputBudget) : ""}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/,/g, "");
+                          if (value === "") {
+                            setInputBudget(null);
+                          } else {
+                            const numValue = parseInt(value, 10);
+                            if (!isNaN(numValue) && numValue > 0) {
+                              if (numValue > 999999) {
+                                toast.error("100만원 이하로만 입력 가능합니다.");
+                                return;
+                              }
+                              setInputBudget(numValue);
+                            }
                           }
-                        }
-                      }}
-                      className="flex-1"
-                      min="0"
-                    />
+                        }}
+                        className="w-full pr-24"
+                        min="0"
+                        max="999999"
+                      />
+                      {inputBudget !== null && inputBudget > 0 && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none whitespace-nowrap">
+                          {formatToKoreanCurrency(inputBudget)}
+                        </span>
+                      )}
+                    </div>
                     {!isAutoSelectMode ? (
                       <Button
                         onClick={executeAutoSelect}
@@ -2513,24 +2799,126 @@ const Payment = () => {
                     )}
 
                 {selectedGifticons.size > 0 && (
-                  <div className="mt-4 pt-4 border-t border-border">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">총 구매 금액</span>
-                      <span className="font-bold text-lg text-primary">
-                        {totalCost.toLocaleString()}원
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-sm text-muted-foreground">총 기프티콘 금액권</span>
-                      <span className="font-semibold">
-                        {totalOriginalPrice.toLocaleString()}원
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-sm text-muted-foreground">총 할인 금액</span>
-                      <span className="font-semibold text-primary">
-                        {totalDiscount.toLocaleString()}원
-                      </span>
+                  <div className="mt-4 pt-4 border-t border-border space-y-4">
+                    {/* 할인쿠폰 선택 섹션 */}
+                    {availableCoupons.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Ticket className="w-4 h-4 text-primary" />
+                          <span className="text-sm font-medium">할인쿠폰</span>
+                        </div>
+                        <div className="space-y-2">
+                          {availableCoupons.map((coupon) => {
+                            const isSelected = selectedCoupon?.id === coupon.id;
+                            const canUse = !coupon.min_purchase_amount || totalCostBeforeCoupon >= coupon.min_purchase_amount;
+                            const discountAmount = coupon.discount_type === 'percent'
+                              ? Math.floor(totalCostBeforeCoupon * (coupon.discount_value / 100))
+                              : coupon.discount_value;
+                            
+                            return (
+                              <div
+                                key={coupon.id}
+                                className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'border-primary bg-primary/5'
+                                    : canUse
+                                    ? 'border-border/50 hover:border-border'
+                                    : 'border-muted/50 opacity-50 cursor-not-allowed'
+                                }`}
+                                onClick={() => {
+                                  if (canUse) {
+                                    setSelectedCoupon(isSelected ? null : coupon);
+                                  }
+                                }}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <Checkbox
+                                        checked={isSelected}
+                                        disabled={!canUse}
+                                        className="w-4 h-4"
+                                      />
+                                      <div>
+                                        <p className="font-semibold text-sm">{coupon.name}</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                          {coupon.description}
+                                        </p>
+                                        {coupon.min_purchase_amount && (
+                                          <p className="text-xs text-muted-foreground mt-0.5">
+                                            최소 {coupon.min_purchase_amount.toLocaleString()}원 이상 구매
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {canUse && (
+                                    <div className="text-right">
+                                      <p className="font-bold text-primary text-sm">
+                                        {coupon.discount_type === 'percent' 
+                                          ? `${coupon.discount_value}%`
+                                          : `${coupon.discount_value.toLocaleString()}원`}
+                                      </p>
+                                      {totalCostBeforeCoupon > 0 && (
+                                        <p className="text-xs text-muted-foreground">
+                                          {discountAmount.toLocaleString()}원 할인
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {selectedCoupon && couponDiscount > 0 && (
+                          <div className="p-2 bg-primary/10 rounded-lg">
+                            <p className="text-sm font-medium text-primary">
+                              {selectedCoupon.name} 적용: {couponDiscount.toLocaleString()}원 할인
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 총 금액 표시 */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold">총 구매 금액</span>
+                        <span className="font-bold text-lg text-primary">
+                          {totalCost.toLocaleString()}원
+                        </span>
+                      </div>
+                      {totalCostBeforeCoupon !== totalCost && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground line-through">
+                            쿠폰 적용 전 금액
+                          </span>
+                          <span className="text-xs text-muted-foreground line-through">
+                            {totalCostBeforeCoupon.toLocaleString()}원
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-sm text-muted-foreground">총 기프티콘 금액권</span>
+                        <span className="font-semibold">
+                          {totalOriginalPrice.toLocaleString()}원
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-sm text-muted-foreground">총 할인 금액</span>
+                        <span className="font-semibold text-primary">
+                          {totalDiscount.toLocaleString()}원
+                        </span>
+                      </div>
+                      {couponDiscount > 0 && (
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-xs text-muted-foreground">할인쿠폰 할인</span>
+                          <span className="text-xs text-primary">
+                            -{couponDiscount.toLocaleString()}원
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

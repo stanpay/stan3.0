@@ -99,3 +99,154 @@ export async function loadKakaoMaps(appKey?: string): Promise<typeof window & { 
   kakaoLoaded = true;
   return window as any;
 }
+
+// 카카오 로컬 API 타입 정의
+export interface KakaoSearchResult {
+  place_name: string;
+  address_name: string;
+  road_address_name: string;
+  x: string; // longitude
+  y: string; // latitude
+  category_name: string;
+  place_url: string;
+}
+
+export interface KakaoSearchResponse {
+  documents: KakaoSearchResult[];
+  meta: {
+    total_count: number;
+    pageable_count: number;
+    is_end: boolean;
+  };
+}
+
+/**
+ * 검색어 변형 생성 (도로명 주소 검색 개선)
+ * 예: "도제원로41" → ["도제원로41", "도제원로41번길", "도제원로41길"]
+ */
+function generateSearchVariants(query: string): string[] {
+  const trimmed = query.trim();
+  const variants: string[] = [trimmed]; // 원본 검색어는 항상 포함
+
+  // 숫자로 끝나는 경우 도로명 접미사 추가
+  const numberSuffixMatch = trimmed.match(/^(.+?)(\d+)$/);
+  if (numberSuffixMatch) {
+    const [, prefix, number] = numberSuffixMatch;
+    // "번길", "길" 등의 접미사가 없을 때만 추가
+    if (!trimmed.match(/(번길|길|로|대로)$/)) {
+      variants.push(`${prefix}${number}번길`);
+      variants.push(`${prefix}${number}길`);
+    }
+  }
+
+  return variants;
+}
+
+/**
+ * 카카오 로컬 API를 사용하여 주소/장소 검색
+ * @param query 검색어 (동/읍/면 또는 장소명)
+ * @param page 페이지 번호 (기본값: 1)
+ * @param size 페이지당 결과 수 (기본값: 15, 최대 15)
+ * @returns 검색 결과 목록
+ */
+export async function searchAddress(
+  query: string,
+  page: number = 1,
+  size: number = 15
+): Promise<KakaoSearchResponse> {
+  // 여러 가능한 환경 변수 이름 확인 (REST API 키 우선, 없으면 APP_KEY 사용)
+  const restApiKey = 
+    import.meta.env.VITE_KAKAO_REST_API_KEY ||
+    import.meta.env.VITE_KAKAO_API_KEY ||
+    import.meta.env.VITE_KAKAO_REST_KEY ||
+    import.meta.env.VITE_KAKAO_KEY ||
+    import.meta.env.VITE_KAKAO_APP_KEY; // JavaScript 키도 시도 (일부 경우 동일할 수 있음)
+  
+  if (!restApiKey) {
+    throw new Error('카카오 REST API 키가 설정되지 않았습니다. .env 파일에 VITE_KAKAO_REST_API_KEY를 설정해주세요.');
+  }
+
+  if (!query || query.trim().length === 0) {
+    return {
+      documents: [],
+      meta: {
+        total_count: 0,
+        pageable_count: 0,
+        is_end: true,
+      },
+    };
+  }
+
+  // 검색어 변형 생성
+  const searchVariants = generateSearchVariants(query);
+  const allResults: KakaoSearchResult[] = [];
+  const seenPlaceIds = new Set<string>();
+
+  // 여러 변형으로 검색 시도
+  for (let i = 0; i < searchVariants.length; i++) {
+    const variant = searchVariants[i];
+    try {
+      const url = new URL('https://dapi.kakao.com/v2/local/search/keyword.json');
+      url.searchParams.append('query', variant);
+      url.searchParams.append('page', page.toString());
+      url.searchParams.append('size', Math.min(size, 15).toString());
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          Authorization: `KakaoAK ${restApiKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        // 첫 번째 검색어가 실패하면 다음 변형 시도
+        if (i === 0 && searchVariants.length > 1) {
+          continue;
+        }
+        throw new Error(`카카오 API 오류: ${response.status} ${response.statusText}`);
+      }
+
+      const data: KakaoSearchResponse = await response.json();
+      
+      // 중복 제거하면서 결과 추가
+      for (const doc of data.documents) {
+        const placeId = doc.place_name + doc.address_name;
+        if (!seenPlaceIds.has(placeId)) {
+          seenPlaceIds.add(placeId);
+          allResults.push(doc);
+        }
+      }
+
+      // 첫 번째 검색어로 결과가 충분하면 중단
+      if (i === 0 && allResults.length >= size) {
+        break;
+      }
+      
+      // 결과가 충분하면 중단
+      if (allResults.length >= size) {
+        break;
+      }
+    } catch (error) {
+      // 첫 번째 검색어가 아니면 에러를 무시하고 계속
+      if (i > 0) {
+        continue;
+      }
+      // 첫 번째 검색어 실패 시 다음 변형 시도
+      if (i === 0 && searchVariants.length > 1) {
+        continue;
+      }
+      // 마지막 변형도 실패하면 에러 던지기
+      console.error('주소 검색 오류:', error);
+      throw error;
+    }
+  }
+
+  return {
+    documents: allResults.slice(0, size),
+    meta: {
+      total_count: allResults.length,
+      pageable_count: allResults.length,
+      is_end: true,
+    },
+  };
+}

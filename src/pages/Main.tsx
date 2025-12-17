@@ -39,6 +39,7 @@ const Main = () => {
   const [isLoadingStores, setIsLoadingStores] = useState(true);
   const [isLoadingMoreStores, setIsLoadingMoreStores] = useState(false);
   const [currentCoords, setCurrentCoords] = useState<{latitude: number, longitude: number} | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const getAddressFromCoords = async (latitude: number, longitude: number) => {
     try {
@@ -180,23 +181,205 @@ const Main = () => {
       } catch (error: any) {
         console.error("❌ [위치 초기화] Kakao SDK 로드 실패:", error);
         setIsLoadingLocation(false);
-        const defaultLocation = "강남구 역삼동";
-        setCurrentLocation(defaultLocation);
-        localStorage.setItem("selectedLocation", defaultLocation);
+        setCurrentLocation("위치 불러올 수 없음");
+        localStorage.removeItem("selectedLocation");
+        localStorage.removeItem("currentCoordinates");
         toast({
           title: "위치 기반 검색 불가",
           description: error.message || "카카오 SDK 설정 오류입니다. 배포 환경에 VITE_KAKAO_APP_KEY 환경 변수를 설정해주세요.",
           variant: "destructive",
         });
-        // SDK 없이도 기본 위치로 설정
         setIsLoadingStores(false);
         setStores([]);
         return;
       }
 
-      // Main 페이지 진입 시 항상 현재 위치를 새로 가져오기
+      // Main 페이지 최초 접근 시 위치 정보 확인
       setIsLoadingLocation(true);
 
+      // 브라우저 위치 가져오기 함수 정의 (호출 전에 선언 필요)
+      const fetchBrowserLocation = async () => {
+        // 위치 권한 확인 및 현재 위치 가져오기
+        if (navigator.geolocation) {
+          console.log("🌍 [위치 정보] 브라우저 위치 정보 요청 시작");
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              try {
+                const { latitude, longitude } = position.coords;
+                console.log("✅ [위치 정보] 좌표 획득 성공:", { latitude, longitude });
+                
+                // 좌표 저장
+                localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+                localStorage.setItem("isManualLocation", "false"); // 브라우저 위치는 자동
+                
+                // 현재 위치 표시
+                setCurrentCoords({ latitude, longitude });
+                
+                // 주소 변환 (선택사항)
+                try {
+                  const { loadKakaoMaps } = await import("@/lib/kakao");
+                  const kakao = await loadKakaoMaps();
+                  const geocoder = new kakao.maps.services.Geocoder();
+                  
+                  geocoder.coord2Address(longitude, latitude, (result: any, status: any) => {
+                    if (status === kakao.maps.services.Status.OK) {
+                      const address = result[0].road_address?.address_name || result[0].address?.address_name || "현재 위치";
+                      setCurrentLocation(address);
+                      localStorage.setItem("selectedLocation", address);
+                    } else {
+                      setCurrentLocation("현재 위치");
+                    }
+                    setIsLoadingLocation(false);
+                  });
+                } catch (error) {
+                  console.error("주소 변환 오류:", error);
+                  setCurrentLocation("현재 위치");
+                  setIsLoadingLocation(false);
+                }
+                
+                // 매장 정보 가져오기
+                console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
+                await fetchNearbyStores(latitude, longitude);
+              } catch (error) {
+                console.error("❌ [위치 정보] 좌표 처리 오류:", error);
+                setCurrentLocation("위치 불러올 수 없음");
+                setIsLoadingLocation(false);
+              }
+            },
+            (error) => {
+              console.error("❌ [위치 정보] 위치 가져오기 실패:", error);
+              let errorMessage = "위치를 가져올 수 없습니다.";
+              
+              switch (error.code) {
+                case error.PERMISSION_DENIED:
+                  errorMessage = "위치 권한이 거부되었습니다.";
+                  break;
+                case error.POSITION_UNAVAILABLE:
+                  errorMessage = "위치 정보를 사용할 수 없습니다.";
+                  break;
+                case error.TIMEOUT:
+                  errorMessage = "위치 요청 시간이 초과되었습니다.";
+                  break;
+              }
+              
+              toast({
+                title: "위치 가져오기 실패",
+                description: errorMessage,
+                variant: "destructive",
+              });
+              
+              setCurrentLocation("위치 불러올 수 없음");
+              setIsLoadingLocation(false);
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 0,
+            }
+          );
+        } else {
+          console.error("❌ [위치 정보] 브라우저가 위치 서비스를 지원하지 않습니다.");
+          toast({
+            title: "위치 서비스 미지원",
+            description: "브라우저가 위치 서비스를 지원하지 않습니다.",
+            variant: "destructive",
+          });
+          setCurrentLocation("위치 불러올 수 없음");
+          setIsLoadingLocation(false);
+        }
+      };
+
+      // localStorage에 저장된 좌표 확인
+      let savedCoordinates = localStorage.getItem("currentCoordinates");
+      const savedLocation = localStorage.getItem("selectedLocation");
+      const isManualLocation = localStorage.getItem("isManualLocation") === "true";
+
+      // 사용자가 직접 설정한 위치가 있으면 그것을 사용 (현재 위치를 불러오지 않음)
+      if (isManualLocation && savedLocation) {
+        // 좌표가 있으면 바로 사용
+        if (savedCoordinates) {
+          try {
+            const coords = JSON.parse(savedCoordinates);
+            const { latitude, longitude } = coords;
+            
+            // 좌표 유효성 검사
+            if (typeof latitude === 'number' && typeof longitude === 'number' && 
+                !isNaN(latitude) && !isNaN(longitude) &&
+                latitude >= -90 && latitude <= 90 &&
+                longitude >= -180 && longitude <= 180) {
+              
+              console.log("✅ [위치 정보] 직접 설정한 위치 사용:", { latitude, longitude, location: savedLocation });
+              
+              // 저장된 위치 표시
+              setCurrentLocation(savedLocation);
+              setCurrentCoords({ latitude, longitude });
+              setIsLoadingLocation(false);
+              
+              // 매장 정보 가져오기
+              console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
+              await fetchNearbyStores(latitude, longitude);
+              return; // 직접 설정한 위치를 사용했으므로 현재 위치 가져오기 건너뛰기
+            } else {
+              console.warn("⚠️ [위치 정보] 저장된 좌표가 유효하지 않음:", { latitude, longitude });
+              // 유효하지 않은 좌표는 제거하고 주소 검색으로 좌표 가져오기
+              localStorage.removeItem("currentCoordinates");
+              savedCoordinates = null; // 변수 업데이트하여 fallback 로직이 실행되도록 함
+            }
+          } catch (error) {
+            console.error("❌ [위치 초기화] 저장된 좌표 파싱 오류:", error);
+            // 저장된 좌표가 잘못되었으면 제거하고 주소 검색으로 좌표 가져오기
+            localStorage.removeItem("currentCoordinates");
+            savedCoordinates = null; // 변수 업데이트하여 fallback 로직이 실행되도록 함
+          }
+        }
+        
+        // 좌표가 없으면 주소 검색으로 좌표 가져오기 (최근 위치 선택 시)
+        if (!savedCoordinates) {
+          try {
+            console.log("🔍 [위치 정보] 주소 검색으로 좌표 가져오기:", savedLocation);
+            const { searchAddress } = await import("@/lib/kakao");
+            const searchResult = await searchAddress(savedLocation);
+            
+            if (searchResult.documents && searchResult.documents.length > 0) {
+              const firstResult = searchResult.documents[0];
+              const latitude = parseFloat(firstResult.y);
+              const longitude = parseFloat(firstResult.x);
+              
+              // 좌표 저장
+              localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+              
+              console.log("✅ [위치 정보] 주소 검색으로 좌표 획득:", { latitude, longitude });
+              
+              // 저장된 위치 표시
+              setCurrentLocation(savedLocation);
+              setCurrentCoords({ latitude, longitude });
+              setIsLoadingLocation(false);
+              
+              // 매장 정보 가져오기
+              console.log("🏪 [매장 검색] fetchNearbyStores 호출 시작");
+              await fetchNearbyStores(latitude, longitude);
+              return; // 직접 설정한 위치를 사용했으므로 현재 위치 가져오기 건너뛰기
+            } else {
+              console.warn("⚠️ [위치 정보] 주소 검색 결과 없음:", savedLocation);
+              setCurrentLocation("위치 불러올 수 없음");
+              setIsLoadingLocation(false);
+              return; // 수동 위치 설정이므로 브라우저 위치 가져오기 건너뛰기
+            }
+          } catch (error) {
+            console.error("❌ [위치 초기화] 주소 검색 오류:", error);
+            setCurrentLocation("위치 불러올 수 없음");
+            setIsLoadingLocation(false);
+            return; // 수동 위치 설정이므로 브라우저 위치 가져오기 건너뛰기
+          }
+        }
+      }
+      
+      // 직접 설정한 위치가 없으면 기본적으로 현재 위치 가져오기
+      console.log("🌍 [위치 정보] 현재 위치 가져오기 시작");
+      await fetchBrowserLocation();
+    };
+
+    const fetchBrowserLocation = async () => {
       // 위치 권한 확인 및 현재 위치 가져오기
       if (navigator.geolocation) {
         console.log("🌍 [위치 정보] 브라우저 위치 정보 요청 시작");
@@ -211,9 +394,10 @@ const Main = () => {
               const address = await getAddressFromCoords(latitude, longitude);
               console.log("✅ [주소 변환] 완료:", address);
               
-              // 저장 및 표시
+              // 저장 및 표시 (현재 위치는 자동으로 가져온 것이므로 isManualLocation 플래그 없음)
               localStorage.setItem("selectedLocation", address);
               localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+              localStorage.removeItem("isManualLocation"); // 현재 위치는 수동 설정이 아님
               setCurrentLocation(address);
               setCurrentCoords({ latitude, longitude });
               setIsLoadingLocation(false);
@@ -223,9 +407,9 @@ const Main = () => {
               await fetchNearbyStores(latitude, longitude);
             } catch (error) {
               console.error("❌ [위치 초기화] 주소 변환 중 오류:", error);
-              const defaultLocation = "강남구 역삼동";
-              setCurrentLocation(defaultLocation);
-              localStorage.setItem("selectedLocation", defaultLocation);
+              setCurrentLocation("위치 불러올 수 없음");
+              localStorage.removeItem("selectedLocation");
+              localStorage.removeItem("currentCoordinates");
               setIsLoadingLocation(false);
             }
           },
@@ -234,10 +418,9 @@ const Main = () => {
             console.log("에러 코드:", error.code);
             console.log("에러 메시지:", error.message);
             
-            // 기본값 설정
-            const defaultLocation = "강남구 역삼동";
-            setCurrentLocation(defaultLocation);
-            localStorage.setItem("selectedLocation", defaultLocation);
+            setCurrentLocation("위치 불러올 수 없음");
+            localStorage.removeItem("selectedLocation");
+            localStorage.removeItem("currentCoordinates");
             setIsLoadingLocation(false);
             
             // 에러 메시지 표시 (권한 거부시)
@@ -257,9 +440,9 @@ const Main = () => {
         );
       } else {
         // Geolocation 미지원
-        const defaultLocation = "강남구 역삼동";
-        setCurrentLocation(defaultLocation);
-        localStorage.setItem("selectedLocation", defaultLocation);
+        setCurrentLocation("위치 불러올 수 없음");
+        localStorage.removeItem("selectedLocation");
+        localStorage.removeItem("currentCoordinates");
         setIsLoadingLocation(false);
       }
     };
@@ -311,25 +494,57 @@ const Main = () => {
         console.log("✅ [세션 유지/갱신] 로그인 상태 유지");
         setIsLoggedIn(true);
         
-        // 처음 로그인한 경우에만 위치 정보 다시 가져오기 (TOKEN_REFRESHED는 제외)
-        if (event === "SIGNED_IN" && session && navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            async (position) => {
-              const { latitude, longitude } = position.coords;
-              const address = await getAddressFromCoords(latitude, longitude);
-              localStorage.setItem("selectedLocation", address);
-              localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-              setCurrentLocation(address);
-              setCurrentCoords({ latitude, longitude });
-              await fetchNearbyStores(latitude, longitude);
-            },
-            (error) => {
-              const defaultLocation = "강남구 역삼동";
-              setCurrentLocation(defaultLocation);
-              localStorage.setItem("selectedLocation", defaultLocation);
-            },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-          );
+        // 처음 로그인한 경우에만 위치 정보 확인 (TOKEN_REFRESHED는 제외)
+        // 직접 설정한 위치가 있으면 사용하고, 없을 때만 브라우저 위치 가져오기
+        if (event === "SIGNED_IN" && session) {
+          const savedCoordinates = localStorage.getItem("currentCoordinates");
+          const savedLocation = localStorage.getItem("selectedLocation");
+          const isManualLocation = localStorage.getItem("isManualLocation") === "true";
+          
+          // 직접 설정한 위치가 있으면 그것을 사용
+          if (isManualLocation && savedCoordinates && savedLocation) {
+            try {
+              const coords = JSON.parse(savedCoordinates);
+              const { latitude, longitude } = coords;
+              
+              // 좌표 유효성 검사
+              if (typeof latitude === 'number' && typeof longitude === 'number' && 
+                  !isNaN(latitude) && !isNaN(longitude) &&
+                  latitude >= -90 && latitude <= 90 &&
+                  longitude >= -180 && longitude <= 180) {
+                console.log("✅ [세션 갱신] 직접 설정한 위치 사용:", { latitude, longitude });
+                setCurrentLocation(savedLocation);
+                setCurrentCoords({ latitude, longitude });
+                await fetchNearbyStores(latitude, longitude);
+                return; // 직접 설정한 위치를 사용했으므로 현재 위치 가져오기 건너뛰기
+              }
+            } catch (error) {
+              console.error("❌ [세션 갱신] 저장된 좌표 파싱 오류:", error);
+            }
+          }
+          
+          // 직접 설정한 위치가 없거나 유효하지 않으면 현재 위치 가져오기
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              async (position) => {
+                const { latitude, longitude } = position.coords;
+                const address = await getAddressFromCoords(latitude, longitude);
+                localStorage.setItem("selectedLocation", address);
+                localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+                localStorage.removeItem("isManualLocation"); // 현재 위치는 수동 설정이 아님
+                setCurrentLocation(address);
+                setCurrentCoords({ latitude, longitude });
+                await fetchNearbyStores(latitude, longitude);
+              },
+              (error) => {
+                setCurrentLocation("위치 불러올 수 없음");
+                localStorage.removeItem("selectedLocation");
+                localStorage.removeItem("currentCoordinates");
+                localStorage.removeItem("isManualLocation");
+              },
+              { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+            );
+          }
         }
       }
       
@@ -363,6 +578,7 @@ const Main = () => {
             
             localStorage.setItem("selectedLocation", address);
             localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
+            localStorage.removeItem("isManualLocation"); // 새로고침으로 현재 위치를 가져왔으므로 수동 설정 아님
             setCurrentLocation(address);
             setCurrentCoords({ latitude, longitude });
             setIsLoadingLocation(false);
@@ -375,23 +591,23 @@ const Main = () => {
             });
           } catch (error) {
             console.error("❌ [위치 새로고침] 주소 변환 중 오류:", error);
-            const defaultLocation = "강남구 역삼동";
-            setCurrentLocation(defaultLocation);
-            localStorage.setItem("selectedLocation", defaultLocation);
+            setCurrentLocation("위치 불러올 수 없음");
+            localStorage.removeItem("selectedLocation");
+            localStorage.removeItem("currentCoordinates");
             setIsLoadingLocation(false);
             
             toast({
               title: "위치 업데이트 실패",
-              description: "주소 변환에 실패했습니다. 기본 위치로 설정됩니다.",
+              description: "주소 변환에 실패했습니다.",
               variant: "destructive",
             });
           }
         },
         (error) => {
           console.error("위치 가져오기 실패:", error);
-          const defaultLocation = "강남구 역삼동";
-          setCurrentLocation(defaultLocation);
-          localStorage.setItem("selectedLocation", defaultLocation);
+          setCurrentLocation("위치 불러올 수 없음");
+          localStorage.removeItem("selectedLocation");
+          localStorage.removeItem("currentCoordinates");
           setIsLoadingLocation(false);
           
           toast({
@@ -1044,7 +1260,14 @@ const Main = () => {
     }
   };
 
-  const sortedStores = [...stores].sort((a, b) => {
+  // 검색어로 필터링
+  const filteredStores = searchQuery.trim()
+    ? stores.filter(store => 
+        store.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : stores;
+
+  const sortedStores = [...filteredStores].sort((a, b) => {
     if (sortBy === "distance") {
       return a.distanceNum - b.distanceNum;
     } else {
@@ -1057,42 +1280,44 @@ const Main = () => {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95">
         <div className="max-w-md mx-auto px-4 py-4">
-          <Button 
-            variant="outline" 
-            className="group w-full justify-between h-12 rounded-xl border-border/50 hover:border-primary/50 transition-colors"
-            disabled={isLoadingLocation || !isLoggedIn}
-            onClick={() => {
-              if (isLoggedIn) {
-                navigate('/location');
-              } else {
-                toast({
-                  title: "로그인 필요",
-                  description: "위치 설정을 이용하려면 로그인이 필요합니다.",
-                });
-              }
-            }}
-          >
-            <div className="flex items-center">
-              {isLoadingLocation ? (
-                <Loader2 className="w-5 h-5 mr-2 text-primary animate-spin" />
-              ) : (
-                <MapPin className="w-5 h-5 mr-2 text-primary group-hover:text-white transition-colors" />
-              )}
-              <span className="font-medium">
-                {isLoadingLocation ? "위치 확인 중..." : `현재 위치: ${currentLocation}`}
-              </span>
-            </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleRefreshLocation();
+          <div className="flex items-center gap-2 w-full">
+            <Button 
+              variant="outline" 
+              className="group flex-1 justify-start h-12 rounded-xl border-border/50 hover:border-primary/50 transition-colors"
+              disabled={isLoadingLocation || !isLoggedIn}
+              onClick={() => {
+                if (isLoggedIn) {
+                  navigate('/location');
+                } else {
+                  toast({
+                    title: "로그인 필요",
+                    description: "위치 설정을 이용하려면 로그인이 필요합니다.",
+                  });
+                }
               }}
-              disabled={isLoadingLocation}
-              className="p-1.5 hover:bg-accent rounded-md transition-colors disabled:opacity-50"
+            >
+              <div className="flex items-center">
+                {isLoadingLocation ? (
+                  <Loader2 className="w-5 h-5 mr-2 text-primary animate-spin" />
+                ) : (
+                  <MapPin className="w-5 h-5 mr-2 text-primary group-hover:text-white transition-colors" />
+                )}
+                <span className="font-medium">
+                  {isLoadingLocation ? "위치 확인 중..." : `현재 위치: ${currentLocation}`}
+                </span>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-12 w-12 rounded-xl border-border/50 hover:border-primary/50 transition-colors"
+              disabled={isLoadingLocation || !isLoggedIn}
+              onClick={handleRefreshLocation}
+              aria-label="위치 새로고침"
             >
               <RefreshCw className={`w-4 h-4 ${isLoadingLocation ? 'animate-spin' : ''}`} />
-            </button>
-          </Button>
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -1103,6 +1328,8 @@ const Main = () => {
           <input
             type="text"
             placeholder="매장 검색..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full h-12 pl-10 pr-4 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
           />
         </div>

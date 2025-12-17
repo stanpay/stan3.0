@@ -97,5 +97,22 @@ All colors MUST be HSL.
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     font-variation-settings: normal;
   }
+
+  /* Prevent passive event listener warnings */
+  button, 
+  a,
+  [role="button"],
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+  }
+
+  img {
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
 }
 
