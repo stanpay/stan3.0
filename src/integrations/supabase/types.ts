@@ -100,7 +100,6 @@ export type Database = {
           id: string
           name: string | null
           payment_count: number
-          points: number
           selling_count: number
           updated_at: string
         }
@@ -111,7 +110,6 @@ export type Database = {
           id: string
           name?: string | null
           payment_count?: number
-          points?: number
           selling_count?: number
           updated_at?: string
         }
@@ -122,7 +120,6 @@ export type Database = {
           id?: string
           name?: string | null
           payment_count?: number
-          points?: number
           selling_count?: number
           updated_at?: string
         }
@@ -170,6 +167,7 @@ export type Database = {
           created_at: string | null
           expiry_date: string
           id: string
+          name: string
           original_price: number
           reserved_at: string | null
           reserved_by: string | null
@@ -184,6 +182,7 @@ export type Database = {
           created_at?: string | null
           expiry_date: string
           id?: string
+          name: string
           original_price: number
           reserved_at?: string | null
           reserved_by?: string | null
@@ -198,6 +197,7 @@ export type Database = {
           created_at?: string | null
           expiry_date?: string
           id?: string
+          name?: string
           original_price?: number
           reserved_at?: string | null
           reserved_by?: string | null

@@ -169,14 +169,14 @@ const MyPage = () => {
             return (
               <div key={item.path}>
                 <Link to={item.path}>
-                  <div className="p-4 flex items-center justify-between hover:bg-accent transition-colors cursor-pointer">
+                  <div className="group p-4 flex items-center justify-between hover:bg-primary transition-colors cursor-pointer">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Icon className="w-5 h-5 text-primary" />
+                      <div className="w-10 h-10 rounded-full bg-primary/10 group-hover:bg-white/20 flex items-center justify-center transition-colors">
+                        <Icon className="w-5 h-5 text-primary group-hover:text-white transition-colors" />
                       </div>
-                      <span className="font-medium">{item.label}</span>
+                      <span className="font-medium group-hover:text-white transition-colors">{item.label}</span>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-white transition-colors" />
                   </div>
                 </Link>
                 {index < menuItems.length - 1 && <Separator />}

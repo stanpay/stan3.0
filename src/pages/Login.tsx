@@ -18,20 +18,32 @@ const Login = () => {
     });
 
     // Listen for auth state changes (OAuth callback handling)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Login 페이지 인증 상태 변경:", event, session ? "세션 있음" : "세션 없음");
+      
+      // 관리자 페이지 관련 경로인지 확인
+      const isAdminPath = window.location.pathname.startsWith("/admin");
       
       if (event === "SIGNED_OUT" || (!session && event !== "INITIAL_SESSION")) {
         // 로그아웃 이벤트: 루트에 머물도록 함 (이미 루트에 있으면 아무것도 하지 않음)
-        if (window.location.pathname !== "/") {
+        // 단, 관리자 페이지에서는 관리자 로그인 페이지로 이동
+        if (isAdminPath) {
+          navigate("/admin/login", { replace: true });
+        } else if (window.location.pathname !== "/") {
           navigate("/", { replace: true });
         }
       } else if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
-        // 로그인 이벤트: 메인으로 이동
+        // 관리자 페이지 경로가 아니면 메인으로 이동
+        // 관리자 페이지는 AdminLogin에서 처리하도록 함
+        if (!isAdminPath) {
         navigate("/main");
+        }
       } else if (event === "INITIAL_SESSION" && session) {
         // 초기 세션 로드 시 세션이 있으면 메인으로 이동
+        // 단, 관리자 페이지 경로가 아니면
+        if (!isAdminPath) {
         navigate("/main");
+        }
       }
     });
 

@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ArrowLeft, Gift, CreditCard, Loader2, Ticket, ChevronDown, ChevronUp } from "lucide-react";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -227,6 +228,7 @@ const Payment = () => {
   const [remainingTime, setRemainingTime] = useState<number>(60); // Step 1 타이머 (초 단위)
   const [availableCoupons, setAvailableCoupons] = useState<Coupon[]>([]); // 사용 가능한 할인쿠폰 목록
   const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null); // 선택된 할인쿠폰
+  const [isCouponExpanded, setIsCouponExpanded] = useState<boolean>(false); // 할인쿠폰 섹션 펼침 여부
 
   // 기프티콘 할인율 중 최대값 계산
   const maxGifticonDiscount = useMemo(() => {
@@ -766,10 +768,10 @@ const Payment = () => {
           {
             id: '1',
             name: '신규 가입 쿠폰',
-            description: '첫 구매 시 10% 할인',
-            discount_type: 'percent',
-            discount_value: 10,
-            min_purchase_amount: 10000,
+            description: '3,000원 할인',
+            discount_type: 'fixed',
+            discount_value: 3000,
+            min_purchase_amount: null,
             expiry_date: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             status: 'available',
           },
@@ -812,47 +814,72 @@ const Payment = () => {
     }
   }, [isLoggedIn]);
 
-  // 자동으로 최대 할인 쿠폰 선택
+  // 자동으로 최적 쿠폰 선택 (접혀있을 때만 자동 적용)
   useEffect(() => {
+    // 펼쳐져 있으면 자동 선택하지 않음 (사용자가 직접 선택)
+    if (isCouponExpanded) {
+      return;
+    }
+
     if (availableCoupons.length === 0 || totalCostBeforeCoupon === 0) {
       setSelectedCoupon(null);
       return;
     }
 
-    // 사용 가능한 쿠폰 중에서 최대 할인 금액을 계산하여 선택
-    let bestCoupon: Coupon | null = null;
-    let maxDiscount = 0;
-
-    availableCoupons.forEach(coupon => {
+    const now = new Date();
+    
+    // 사용 가능한 쿠폰만 필터링
+    const usableCoupons = availableCoupons.filter(coupon => {
       // 최소 구매 금액 체크
       if (coupon.min_purchase_amount && totalCostBeforeCoupon < coupon.min_purchase_amount) {
-        return;
+        return false;
       }
 
       // 만료일 체크
-      const now = new Date();
       const expiryDate = new Date(coupon.expiry_date);
       if (expiryDate < now) {
-        return;
+        return false;
       }
 
-      // 할인 금액 계산
-      let discount = 0;
-      if (coupon.discount_type === 'percent') {
-        discount = Math.floor(totalCostBeforeCoupon * (coupon.discount_value / 100));
-      } else {
-        discount = coupon.discount_value;
-      }
-
-      // 최대 할인 금액보다 크면 선택
-      if (discount > maxDiscount) {
-        maxDiscount = discount;
-        bestCoupon = coupon;
-      }
+      return true;
     });
 
-    setSelectedCoupon(bestCoupon);
-  }, [availableCoupons, totalCostBeforeCoupon]);
+    if (usableCoupons.length === 0) {
+      setSelectedCoupon(null);
+      return;
+    }
+
+    // 정렬: 1순위 유효기한 임박 순, 2순위 할인율 순
+    const sortedCoupons = [...usableCoupons].sort((a, b) => {
+      // 1순위: 유효기한 임박 순 (만료일이 가까운 순)
+      const expiryA = new Date(a.expiry_date).getTime();
+      const expiryB = new Date(b.expiry_date).getTime();
+      if (expiryA !== expiryB) {
+        return expiryA - expiryB; // 오름차순 (임박한 것 먼저)
+      }
+
+      // 2순위: 할인율 순 (할인율이 높은 순)
+      // 할인율 계산 (퍼센트는 discount_value, 고정금액은 대략적인 할인율 추정)
+      const getDiscountRate = (coupon: Coupon): number => {
+        if (coupon.discount_type === 'percent') {
+          return coupon.discount_value;
+        } else {
+          // 고정금액의 경우 대략적인 할인율 추정 (최소 구매 금액 기준)
+          if (coupon.min_purchase_amount) {
+            return (coupon.discount_value / coupon.min_purchase_amount) * 100;
+          }
+          return 0;
+        }
+      };
+
+      const rateA = getDiscountRate(a);
+      const rateB = getDiscountRate(b);
+      return rateB - rateA; // 내림차순 (할인율 높은 것 먼저)
+    });
+
+    // 가장 우선순위가 높은 쿠폰 선택
+    setSelectedCoupon(sortedCoupons[0]);
+  }, [availableCoupons, totalCostBeforeCoupon, isCouponExpanded]);
 
   // 로그인 상태 확인
   useEffect(() => {
@@ -2227,17 +2254,7 @@ const Payment = () => {
   };
 
   const handleConfirmStep1 = async () => {
-    // Step 1 → Step 2 (결제 수단 선택 페이지로 이동)
-    if (selectedGifticons.size === 0) {
-      toast.error("선택된 기프티콘이 없습니다.");
-      return;
-    }
-
-    if (totalCost <= 0) {
-      toast.error("결제 금액이 올바르지 않습니다.");
-      return;
-    }
-
+    // MVP 시연용: Step 1 → Step 3 (가짜 결제 완료 페이지로 바로 이동, 검증 없음)
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -2245,6 +2262,24 @@ const Payment = () => {
         toast.error("로그인이 필요합니다.");
         navigate('/');
         return;
+      }
+
+      // MVP 시연용: 선택된 모든 기프티콘을 판매중으로 전환
+      const selectedIds: string[] = [];
+      for (const selected of selectedGifticons.values()) {
+        selectedIds.push(selected.reservedId || selected.id);
+      }
+
+      if (selectedIds.length > 0) {
+        const { error: updateError } = await supabase
+          .from('used_gifticons')
+          .update({ status: '판매중' })
+          .in('id', selectedIds);
+
+        if (updateError) {
+          console.error("판매중 변경 오류:", updateError);
+          // 에러가 발생해도 계속 진행 (MVP 시연용)
+        }
       }
 
       // customerKey 생성 (사용자 ID 기반)
@@ -2256,8 +2291,8 @@ const Payment = () => {
       // 주문 정보를 sessionStorage에 저장
       const orderData = {
         orderId,
-        amount: totalCost,
-        orderName: `${actualStoreName || '매장'} 기프티콘 ${selectedGifticons.size}개`,
+        amount: totalCost || 0,
+        orderName: `${actualStoreName || '매장'} 기프티콘 ${selectedGifticons.size || 0}개`,
         storeId,
         storeName: actualStoreName,
         storeBrand,
@@ -2269,12 +2304,13 @@ const Payment = () => {
       
       sessionStorage.setItem('toss_payment_order', JSON.stringify(orderData));
       
-      // URL을 변경하여 브라우저 히스토리에 추가 (뒤로가기 지원)
-      navigate(`/payment/${storeId}?step=2`, { replace: false });
+      // MVP 시연용: Step 3로 바로 이동 (가짜 결제 완료 페이지)
+      navigate(`/payment/${storeId}?step=3`, { replace: false });
 
     } catch (error: any) {
       console.error("오류:", error);
-      toast.error(error.message || "오류가 발생했습니다.");
+      // 에러가 발생해도 Step 3로 이동 (MVP 시연용)
+      navigate(`/payment/${storeId}?step=3`, { replace: false });
     }
   };
 
@@ -2802,83 +2838,122 @@ const Payment = () => {
                   <div className="mt-4 pt-4 border-t border-border space-y-4">
                     {/* 할인쿠폰 선택 섹션 */}
                     {availableCoupons.length > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Ticket className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-medium">할인쿠폰</span>
-                        </div>
+                      <Collapsible open={isCouponExpanded} onOpenChange={setIsCouponExpanded}>
                         <div className="space-y-2">
-                          {availableCoupons.map((coupon) => {
-                            const isSelected = selectedCoupon?.id === coupon.id;
-                            const canUse = !coupon.min_purchase_amount || totalCostBeforeCoupon >= coupon.min_purchase_amount;
-                            const discountAmount = coupon.discount_type === 'percent'
-                              ? Math.floor(totalCostBeforeCoupon * (coupon.discount_value / 100))
-                              : coupon.discount_value;
-                            
-                            return (
-                              <div
-                                key={coupon.id}
-                                className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
-                                  isSelected
-                                    ? 'border-primary bg-primary/5'
-                                    : canUse
-                                    ? 'border-border/50 hover:border-border'
-                                    : 'border-muted/50 opacity-50 cursor-not-allowed'
-                                }`}
-                                onClick={() => {
-                                  if (canUse) {
-                                    setSelectedCoupon(isSelected ? null : coupon);
-                                  }
-                                }}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <Checkbox
-                                        checked={isSelected}
-                                        disabled={!canUse}
-                                        className="w-4 h-4"
-                                      />
-                                      <div>
-                                        <p className="font-semibold text-sm">{coupon.name}</p>
-                                        <p className="text-xs text-muted-foreground mt-0.5">
-                                          {coupon.description}
-                                        </p>
-                                        {coupon.min_purchase_amount && (
-                                          <p className="text-xs text-muted-foreground mt-0.5">
-                                            최소 {coupon.min_purchase_amount.toLocaleString()}원 이상 구매
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  {canUse && (
-                                    <div className="text-right">
-                                      <p className="font-bold text-primary text-sm">
-                                        {coupon.discount_type === 'percent' 
-                                          ? `${coupon.discount_value}%`
-                                          : `${coupon.discount_value.toLocaleString()}원`}
-                                      </p>
-                                      {totalCostBeforeCoupon > 0 && (
-                                        <p className="text-xs text-muted-foreground">
-                                          {discountAmount.toLocaleString()}원 할인
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
+                          <CollapsibleTrigger className="w-full">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Ticket className="w-4 h-4 text-primary" />
+                                <span className="text-sm font-medium">할인쿠폰</span>
+                                {selectedCoupon && couponDiscount > 0 && !isCouponExpanded && (
+                                  <span className="text-xs text-primary font-medium">
+                                    ({selectedCoupon.name} 자동 적용)
+                                  </span>
+                                )}
+                              </div>
+                              {isCouponExpanded ? (
+                                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </div>
+                          </CollapsibleTrigger>
+                          
+                          {/* 접혀있을 때: 자동 적용된 쿠폰 정보만 표시 */}
+                          {!isCouponExpanded && selectedCoupon && couponDiscount > 0 && (
+                            <div className="p-3 rounded-lg border border-primary/20 bg-primary/5">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="font-semibold text-sm text-primary">{selectedCoupon.name}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {selectedCoupon.description}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-bold text-primary text-sm">
+                                    -{couponDiscount.toLocaleString()}원
+                                  </p>
                                 </div>
                               </div>
-                            );
-                          })}
+                            </div>
+                          )}
+
+                          {/* 펼쳐졌을 때: 쿠폰 선택 UI */}
+                          <CollapsibleContent>
+                            <div className="space-y-2 pt-2">
+                              {availableCoupons.map((coupon) => {
+                                const isSelected = selectedCoupon?.id === coupon.id;
+                                const canUse = !coupon.min_purchase_amount || totalCostBeforeCoupon >= coupon.min_purchase_amount;
+                                const discountAmount = coupon.discount_type === 'percent'
+                                  ? Math.floor(totalCostBeforeCoupon * (coupon.discount_value / 100))
+                                  : coupon.discount_value;
+                                
+                                return (
+                                  <div
+                                    key={coupon.id}
+                                    className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                                      isSelected
+                                        ? 'border-primary bg-primary/5'
+                                        : canUse
+                                        ? 'border-border/50 hover:border-border'
+                                        : 'border-muted/50 opacity-50 cursor-not-allowed'
+                                    }`}
+                                    onClick={() => {
+                                      if (canUse) {
+                                        setSelectedCoupon(isSelected ? null : coupon);
+                                      }
+                                    }}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <Checkbox
+                                            checked={isSelected}
+                                            disabled={!canUse}
+                                            className="w-4 h-4"
+                                          />
+                                          <div>
+                                            <p className="font-semibold text-sm">{coupon.name}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                              {coupon.description}
+                                            </p>
+                                            {coupon.min_purchase_amount && (
+                                              <p className="text-xs text-muted-foreground mt-0.5">
+                                                최소 {coupon.min_purchase_amount.toLocaleString()}원 이상 구매
+                                              </p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      {canUse && (
+                                        <div className="text-right">
+                                          <p className="font-bold text-primary text-sm">
+                                            {coupon.discount_type === 'percent' 
+                                              ? `${coupon.discount_value}%`
+                                              : `${coupon.discount_value.toLocaleString()}원`}
+                                          </p>
+                                          {totalCostBeforeCoupon > 0 && (
+                                            <p className="text-xs text-muted-foreground">
+                                              {discountAmount.toLocaleString()}원 할인
+                                            </p>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {selectedCoupon && couponDiscount > 0 && (
+                              <div className="p-2 bg-primary/10 rounded-lg mt-2">
+                                <p className="text-sm font-medium text-primary">
+                                  {selectedCoupon.name} 적용: {couponDiscount.toLocaleString()}원 할인
+                                </p>
+                              </div>
+                            )}
+                          </CollapsibleContent>
                         </div>
-                        {selectedCoupon && couponDiscount > 0 && (
-                          <div className="p-2 bg-primary/10 rounded-lg">
-                            <p className="text-sm font-medium text-primary">
-                              {selectedCoupon.name} 적용: {couponDiscount.toLocaleString()}원 할인
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                      </Collapsible>
                     )}
 
                     {/* 총 금액 표시 */}
@@ -2889,16 +2964,6 @@ const Payment = () => {
                           {totalCost.toLocaleString()}원
                         </span>
                       </div>
-                      {totalCostBeforeCoupon !== totalCost && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground line-through">
-                            쿠폰 적용 전 금액
-                          </span>
-                          <span className="text-xs text-muted-foreground line-through">
-                            {totalCostBeforeCoupon.toLocaleString()}원
-                          </span>
-                        </div>
-                      )}
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-sm text-muted-foreground">총 기프티콘 금액권</span>
                         <span className="font-semibold">

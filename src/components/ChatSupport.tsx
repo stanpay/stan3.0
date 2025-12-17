@@ -20,6 +20,11 @@ const ChatSupport = () => {
   const location = useLocation();
   const chatRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
+
+  // 관리자 페이지에서는 채팅 지원 표시하지 않음
+  if (location.pathname.startsWith("/admin")) {
+    return null;
+  }
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,

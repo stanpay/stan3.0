@@ -155,15 +155,42 @@ export async function searchAddress(
   size: number = 15
 ): Promise<KakaoSearchResponse> {
   // 여러 가능한 환경 변수 이름 확인 (REST API 키 우선, 없으면 APP_KEY 사용)
+  // 환경 변수에서 공백과 따옴표 제거
+  const getEnvValue = (key: string): string | undefined => {
+    const value = import.meta.env[key];
+    if (typeof value === 'string') {
+      return value.trim().replace(/^["']|["']$/g, '');
+    }
+    return value;
+  };
+
   const restApiKey = 
-    import.meta.env.VITE_KAKAO_REST_API_KEY ||
-    import.meta.env.VITE_KAKAO_API_KEY ||
-    import.meta.env.VITE_KAKAO_REST_KEY ||
-    import.meta.env.VITE_KAKAO_KEY ||
-    import.meta.env.VITE_KAKAO_APP_KEY; // JavaScript 키도 시도 (일부 경우 동일할 수 있음)
+    getEnvValue('VITE_KAKAO_REST_API_KEY') ||
+    getEnvValue('VITE_KAKAO_API_KEY') ||
+    getEnvValue('VITE_KAKAO_REST_KEY') ||
+    getEnvValue('VITE_KAKAO_KEY') ||
+    getEnvValue('VITE_KAKAO_APP_KEY'); // JavaScript 키도 시도 (일부 경우 동일할 수 있음)
+  
+  // 디버깅: 환경 변수 로딩 확인 (개발 환경에서만)
+  if (import.meta.env.DEV) {
+    console.log('🔍 [카카오 API] 환경 변수 확인:', {
+      VITE_KAKAO_REST_API_KEY: getEnvValue('VITE_KAKAO_REST_API_KEY') ? `✅ ${getEnvValue('VITE_KAKAO_REST_API_KEY')?.substring(0, 8)}...` : '❌ 없음',
+      VITE_KAKAO_APP_KEY: getEnvValue('VITE_KAKAO_APP_KEY') ? `✅ ${getEnvValue('VITE_KAKAO_APP_KEY')?.substring(0, 8)}...` : '❌ 없음',
+      사용할_키: restApiKey ? `✅ ${restApiKey.substring(0, 8)}... (길이: ${restApiKey.length})` : '❌ 없음',
+    });
+  }
   
   if (!restApiKey) {
-    throw new Error('카카오 REST API 키가 설정되지 않았습니다. .env 파일에 VITE_KAKAO_REST_API_KEY를 설정해주세요.');
+    const errorMsg = '카카오 REST API 키가 설정되지 않았습니다. 카카오 개발자 콘솔(https://developers.kakao.com)에서 REST API 키를 발급받아 .env 파일에 VITE_KAKAO_REST_API_KEY를 설정해주세요.';
+    console.error('❌ [카카오 API]', errorMsg);
+    throw new Error(errorMsg);
+  }
+  
+  // API 키 유효성 검사 (빈 문자열 체크)
+  if (restApiKey.trim().length === 0) {
+    const errorMsg = '카카오 REST API 키가 비어있습니다. .env 파일에서 VITE_KAKAO_REST_API_KEY 값을 확인해주세요.';
+    console.error('❌ [카카오 API]', errorMsg);
+    throw new Error(errorMsg);
   }
 
   if (!query || query.trim().length === 0) {
@@ -191,10 +218,22 @@ export async function searchAddress(
       url.searchParams.append('page', page.toString());
       url.searchParams.append('size', Math.min(size, 15).toString());
 
+      // Authorization 헤더 생성 (공백 제거)
+      const authHeader = `KakaoAK ${restApiKey.trim()}`;
+      
+      // 디버깅: 요청 정보 로깅 (개발 환경에서만)
+      if (import.meta.env.DEV && i === 0) {
+        console.log('🔍 [카카오 API] 요청 정보:', {
+          url: url.toString(),
+          authHeader: `${authHeader.substring(0, 20)}...`,
+          apiKeyLength: restApiKey.trim().length,
+        });
+      }
+
       const response = await fetch(url.toString(), {
         method: 'GET',
         headers: {
-          Authorization: `KakaoAK ${restApiKey}`,
+          Authorization: authHeader,
         },
       });
 
@@ -203,6 +242,21 @@ export async function searchAddress(
         if (i === 0 && searchVariants.length > 1) {
           continue;
         }
+        
+        // 401 오류인 경우 더 명확한 에러 메시지 제공
+        if (response.status === 401) {
+          const errorText = await response.text().catch(() => '응답 본문을 읽을 수 없습니다');
+          const errorMsg = `카카오 REST API 인증 실패 (401). API 키를 확인해주세요. 
+- 카카오 개발자 콘솔(https://developers.kakao.com)에서 REST API 키 확인
+- .env 파일에 VITE_KAKAO_REST_API_KEY 설정 확인
+- API 키에 공백이나 따옴표가 포함되지 않았는지 확인
+- 도메인이 카카오 개발자 콘솔에 등록되어 있는지 확인
+응답: ${errorText}`;
+          console.error('❌ [카카오 API]', errorMsg);
+          console.error('❌ [카카오 API] 사용된 API 키:', restApiKey ? `${restApiKey.substring(0, 8)}...` : '없음');
+          throw new Error('카카오 REST API 키가 유효하지 않습니다. 카카오 개발자 콘솔에서 REST API 키를 확인해주세요.');
+        }
+        
         throw new Error(`카카오 API 오류: ${response.status} ${response.statusText}`);
       }
 

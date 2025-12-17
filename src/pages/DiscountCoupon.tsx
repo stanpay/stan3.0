@@ -59,10 +59,10 @@ const DiscountCoupon = () => {
         {
           id: '1',
           name: '신규 가입 쿠폰',
-          description: '첫 구매 시 10% 할인',
-          discount_type: 'percent',
-          discount_value: 10,
-          min_purchase_amount: 10000,
+          description: '3,000원 할인',
+          discount_type: 'fixed',
+          discount_value: 3000,
+          min_purchase_amount: null,
           expiry_date: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           used_at: null,
           status: 'available',
@@ -213,13 +213,6 @@ const DiscountCoupon = () => {
                       </div>
                     </div>
                   </div>
-                  <Button
-                    onClick={() => handleUseCoupon(coupon)}
-                    className="w-full mt-4"
-                    size="sm"
-                  >
-                    사용하기
-                  </Button>
                 </Card>
               ))
             )}
