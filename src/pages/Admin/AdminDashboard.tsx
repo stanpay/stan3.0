@@ -39,7 +39,7 @@ const AdminDashboard = () => {
   const [readChatRooms, setReadChatRooms] = useState<Map<string | null, string>>(new Map()); // user_id -> read_at timestamp
 
   // 기프티콘 데이터 로드
-  const loadGifticons = async () => {
+  const loadGifticons = async (isMountedRef?: { current: boolean }) => {
     setIsLoadingGifticons(true);
     try {
       // 모든 상태의 기프티콘을 가져오기 위해 필터 없이 조회
@@ -59,6 +59,8 @@ const AdminDashboard = () => {
         console.error("Supabase 쿼리 오류:", error);
         throw error;
       }
+
+      if (isMountedRef && !isMountedRef.current) return;
 
       console.log(`총 ${data?.length || 0}개의 기프티콘을 불러왔습니다.`);
       
@@ -83,24 +85,28 @@ const AdminDashboard = () => {
         );
       }
 
+      if (isMountedRef && !isMountedRef.current) return;
       setGifticons(filteredData);
     } catch (error: any) {
       console.error("기프티콘 로드 오류:", error);
+      if (isMountedRef && !isMountedRef.current) return;
       toast({
         title: "오류",
         description: error.message || "기프티콘 데이터를 불러오는 중 오류가 발생했습니다.",
         variant: "destructive",
       });
     } finally {
+      if (isMountedRef && !isMountedRef.current) return;
       setIsLoadingGifticons(false);
     }
   };
 
   // 읽음 상태 로드
-  const loadReadStatus = async () => {
+  const loadReadStatus = async (isMountedRef?: { current: boolean }) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      if (isMountedRef && !isMountedRef.current) return;
 
       const { data, error } = await supabase
         .from("admin_chat_reads")
@@ -111,6 +117,8 @@ const AdminDashboard = () => {
         console.error("읽음 상태 로드 오류:", error);
         return;
       }
+
+      if (isMountedRef && !isMountedRef.current) return;
 
       const readMap = new Map<string | null, string>();
       data?.forEach((item) => {
@@ -123,7 +131,7 @@ const AdminDashboard = () => {
   };
 
   // 채팅 메시지 데이터 로드
-  const loadMessages = async () => {
+  const loadMessages = async (isMountedRef?: { current: boolean }) => {
     setIsLoadingMessages(true);
     try {
       // 모든 메시지 불러오기 (RLS 정책으로 관리자만 접근 가능)
@@ -136,6 +144,8 @@ const AdminDashboard = () => {
         console.error("Supabase 쿼리 오류:", error);
         throw error;
       }
+
+      if (isMountedRef && !isMountedRef.current) return;
 
       console.log(`총 ${data?.length || 0}개의 메시지를 불러왔습니다.`);
 
@@ -152,9 +162,11 @@ const AdminDashboard = () => {
         );
       }
 
+      if (isMountedRef && !isMountedRef.current) return;
       setMessages(filteredData);
     } catch (error: any) {
       console.error("메시지 로드 오류:", error);
+      if (isMountedRef && !isMountedRef.current) return;
       toast({
         title: "오류",
         description: error.message || "메시지 데이터를 불러오는 중 오류가 발생했습니다.",
@@ -162,29 +174,48 @@ const AdminDashboard = () => {
       });
       setMessages([]);
     } finally {
+      if (isMountedRef && !isMountedRef.current) return;
       setIsLoadingMessages(false);
     }
   };
 
   useEffect(() => {
+    const isMountedRef = { current: true };
+
     if (activeTab === "gifticons") {
-      loadGifticons();
+      loadGifticons(isMountedRef);
     } else if (activeTab === "messages") {
-      loadMessages();
-      loadReadStatus();
+      loadMessages(isMountedRef);
+      loadReadStatus(isMountedRef);
     }
+
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [activeTab, statusFilter]);
 
   useEffect(() => {
+    const isMountedRef = { current: true };
+
     if (activeTab === "gifticons") {
-      loadGifticons();
+      loadGifticons(isMountedRef);
     }
+
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [gifticonSearch]);
 
   useEffect(() => {
+    const isMountedRef = { current: true };
+
     if (activeTab === "messages") {
-      loadMessages();
+      loadMessages(isMountedRef);
     }
+
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [messageSearch]);
 
   // 기프티콘 상태 변경
@@ -361,12 +392,14 @@ const AdminDashboard = () => {
 
   // 채팅방 선택 시 읽음 처리 (DB에 저장)
   useEffect(() => {
+    let isMounted = true;
+
     const markAsRead = async () => {
       if (selectedChatRoom === null) {
         // 익명 사용자 채팅방 처리
         try {
           const { data: { user } } = await supabase.auth.getUser();
-          if (!user) return;
+          if (!user || !isMounted) return;
 
           // user_id가 null인 경우 기존 레코드 확인 후 업데이트 또는 삽입
           const { data: existing } = await supabase
@@ -375,6 +408,8 @@ const AdminDashboard = () => {
             .eq("admin_id", user.id)
             .is("user_id", null)
             .single();
+
+          if (!isMounted) return;
 
           if (existing) {
             // 기존 레코드 업데이트
@@ -403,6 +438,8 @@ const AdminDashboard = () => {
             }
           }
 
+          if (!isMounted) return;
+
           // 로컬 상태 업데이트
           setReadChatRooms((prev) => {
             const newMap = new Map(prev);
@@ -417,7 +454,7 @@ const AdminDashboard = () => {
 
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user || !isMounted) return;
 
         // DB에 읽음 상태 저장 (UPSERT)
         const { error } = await supabase
@@ -438,6 +475,8 @@ const AdminDashboard = () => {
           return;
         }
 
+        if (!isMounted) return;
+
         // 로컬 상태 업데이트
         setReadChatRooms((prev) => {
           const newMap = new Map(prev);
@@ -450,6 +489,10 @@ const AdminDashboard = () => {
     };
 
     markAsRead();
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedChatRoom]);
 
   return (
