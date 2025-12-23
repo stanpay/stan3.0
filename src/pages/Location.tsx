@@ -125,10 +125,14 @@ const Location = () => {
   };
 
   const handleCurrentLocation = () => {
+    const isReactNative = (window as any).isReactNative === true;
+    
     if (!navigator.geolocation) {
       toast({
         title: "위치 서비스 미지원",
-        description: "브라우저가 위치 서비스를 지원하지 않습니다.",
+        description: isReactNative 
+          ? "앱이 위치 서비스를 지원하지 않습니다."
+          : "브라우저가 위치 서비스를 지원하지 않습니다.",
         variant: "destructive",
       });
       return;
@@ -157,14 +161,19 @@ const Location = () => {
         
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage = "위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해주세요.";
+          case 1: // PERMISSION_DENIED
+            errorMessage = isReactNative
+              ? "위치 권한이 거부되었습니다. 앱 설정에서 위치 권한을 허용해주세요."
+              : "위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해주세요.";
             // 사용자가 의도적으로 거부한 경우이므로 콘솔 에러를 출력하지 않음
             break;
           case error.POSITION_UNAVAILABLE:
+          case 2: // POSITION_UNAVAILABLE
             errorMessage = "위치 정보를 사용할 수 없습니다.";
             console.error("❌ [위치 정보] 위치 정보를 사용할 수 없음:", error);
             break;
           case error.TIMEOUT:
+          case 3: // TIMEOUT
             errorMessage = "위치 요청 시간이 초과되었습니다.";
             console.error("❌ [위치 정보] 위치 요청 시간 초과:", error);
             break;

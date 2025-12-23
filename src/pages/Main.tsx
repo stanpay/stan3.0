@@ -171,8 +171,139 @@ const Main = () => {
         return;
       }
 
+      // 최근 위치 조회 시간 확인 (5분 이내면 재조회 하지 않음)
+      const lastLocationFetchTime = localStorage.getItem("lastLocationFetchTime");
+      const now = Date.now();
+      const LOCATION_CACHE_DURATION = 5 * 60 * 1000; // 5분
+      
+      console.log("🔍 [위치 캐시 확인] 시작");
+      console.log("📍 [위치 캐시] lastLocationFetchTime:", lastLocationFetchTime, "(타입:", typeof lastLocationFetchTime, ")");
+      console.log("📍 [위치 캐시] 현재 시간:", now);
+      
+      // localStorage 전체 상태 확인
+      console.log("🔍 [localStorage 전체 상태]:", Object.keys(localStorage).filter(key => key.includes('location') || key.includes('Location')).reduce((obj, key) => {
+        obj[key] = localStorage.getItem(key);
+        return obj;
+      }, {} as Record<string, string | null>));
+
+      let cacheMissReason = "";
+      let lastFetchTimestamp = 0;
+      let timeSinceLastFetch = Number.POSITIVE_INFINITY;
+
+      if (!lastLocationFetchTime) {
+        cacheMissReason = "❌ 위치 조회 기록이 없음 (lastLocationFetchTime이 null/undefined)";
+        console.log(cacheMissReason);
+      } else {
+        lastFetchTimestamp = parseInt(lastLocationFetchTime);
+        if (isNaN(lastFetchTimestamp)) {
+          cacheMissReason = "❌ 위치 조회 기록이 숫자가 아님 (parseInt 실패)";
+          console.log(cacheMissReason);
+        } else {
+          timeSinceLastFetch = now - lastFetchTimestamp;
+        const secondsSinceLastFetch = Math.floor(timeSinceLastFetch / 1000);
+        const minutesSinceLastFetch = Math.floor(secondsSinceLastFetch / 60);
+        
+          console.log("⏱️ [위치 캐시] 마지막 위치 조회:", `${secondsSinceLastFetch}초 전 (${minutesSinceLastFetch}분 전)`);
+        console.log("⏱️ [위치 캐시] 캐시 유효 기간:", LOCATION_CACHE_DURATION / 1000, "초");
+
+          if (timeSinceLastFetch >= LOCATION_CACHE_DURATION) {
+            cacheMissReason = `❌ 캐시 만료됨 (${timeSinceLastFetch / 1000}초 경과 > ${LOCATION_CACHE_DURATION / 1000}초)`;
+            console.log(cacheMissReason);
+          }
+        }
+      }
+
+      const hasValidRecentCache = !!lastFetchTimestamp && timeSinceLastFetch < LOCATION_CACHE_DURATION;
+      console.log("⏱️ [위치 캐시] 캐시 유효 여부:", hasValidRecentCache, hasValidRecentCache ? "✅ HIT" : "❌ MISS");
+
+      if (hasValidRecentCache) {
+        console.log("✅✅✅ [위치 캐시 HIT] 5분 이내 캐시 유효 - 저장된 위치 사용, 위치 조회 건너뜀 ✅✅✅");
+        console.log("✅✅✅ [위치 캐시 HIT] 5분 이내 캐시 유효 - 저장된 위치 사용, 위치 조회 건너뜀 ✅✅✅");
+          
+          // 저장된 위치 정보 불러오기
+          const savedCoordinates = localStorage.getItem("currentCoordinates");
+          const savedLocation = localStorage.getItem("selectedLocation");
+          const isManualLocationValue = localStorage.getItem("isManualLocation") === "true";
+          
+          console.log("📍 [위치 캐시] savedLocation:", savedLocation);
+          console.log("📍 [위치 캐시] savedCoordinates:", savedCoordinates);
+          
+          setIsManualLocation(isManualLocationValue);
+          setIsLoadingLocation(false);
+          
+          if (savedLocation) {
+            setCurrentLocation(savedLocation);
+          } else {
+            setCurrentLocation("위치 불러올 수 없음");
+          }
+          
+          if (savedCoordinates) {
+            try {
+              const coords = JSON.parse(savedCoordinates);
+              const { latitude, longitude } = coords;
+              if (typeof latitude === 'number' && typeof longitude === 'number' && 
+                  !isNaN(latitude) && !isNaN(longitude) &&
+                  latitude >= -90 && latitude <= 90 &&
+                  longitude >= -180 && longitude <= 180) {
+                setCurrentCoords({ latitude, longitude });
+                
+                // 저장된 매장 정보가 있으면 사용, 없으면 다시 조회
+                const savedStores = localStorage.getItem('nearbyStores');
+                if (savedStores) {
+                  try {
+                    const storesData = JSON.parse(savedStores);
+                    setStores(storesData);
+                    setIsLoadingStores(false);
+                    console.log("✅ [위치 캐시] 저장된 매장 정보 사용");
+                  } catch (e) {
+                    console.log("⚠️ [위치 캐시] 저장된 매장 정보 파싱 실패, 다시 조회");
+                    // 저장된 매장 정보가 없거나 파싱 실패 시 다시 조회
+                    await fetchNearbyStores(latitude, longitude);
+                  }
+                } else {
+                  console.log("⚠️ [위치 캐시] 저장된 매장 정보 없음, 다시 조회");
+                  await fetchNearbyStores(latitude, longitude);
+                }
+              }
+            } catch (error) {
+              console.error("❌ [위치 캐시] 저장된 좌표 파싱 오류:", error);
+            }
+          }
+          
+          console.log("✅✅✅ [위치 캐시 완료] 위치 조회 완전히 건너뜀 - RETURN ✅✅✅");
+          return; // 이미 위치를 조회했으므로 새로 조회하지 않음
+        }
+
+      if (cacheMissReason) {
+        console.log("❌❌❌ [위치 캐시 MISS] 이유:", cacheMissReason, "- 위치 다시 조회 ❌❌❌");
+      } else {
+        console.log("❌❌❌ [위치 캐시 MISS] 알 수 없는 이유로 캐시 무효 - 위치 다시 조회 ❌❌❌");
+      }
+      
+      console.log("🌍🌍🌍 [위치 조회 시작] 새로운 위치 정보 가져오기 🌍🌍🌍");
+
       // 로그인한 경우 실제 위치 가져오기
-      console.log("📍 [위치 초기화] 시작");
+      console.log("🚀🚀🚀 [위치 초기화] 시작 - 위치 조회 🚀🚀🚀");
+      
+      // 위치 조회 시작 시간 기록
+      const fetchTimestamp = Date.now();
+      const timestampString = fetchTimestamp.toString();
+      console.log("📝 [위치 타임스탬프 저장 전] localStorage 상태:", Object.keys(localStorage).filter(key => key.includes('location') || key.includes('Location')).reduce((obj, key) => {
+        obj[key] = localStorage.getItem(key);
+        return obj;
+      }, {} as Record<string, string | null>));
+
+      localStorage.setItem("lastLocationFetchTime", timestampString);
+      console.log("✅ [위치 타임스탬프] 기록 완료:", fetchTimestamp, "(문자열:", timestampString, ")");
+
+      const savedValue = localStorage.getItem("lastLocationFetchTime");
+      console.log("✅ [위치 타임스탬프] localStorage에서 읽은 값:", savedValue, "(타입:", typeof savedValue, ")");
+      console.log("✅ [위치 타임스탬프] 저장 값과 일치:", savedValue === timestampString ? "✅ 일치" : "❌ 불일치");
+
+      console.log("📝 [위치 타임스탬프 저장 후] localStorage 상태:", Object.keys(localStorage).filter(key => key.includes('location') || key.includes('Location')).reduce((obj, key) => {
+        obj[key] = localStorage.getItem(key);
+        return obj;
+      }, {} as Record<string, string | null>));
       
       // Kakao SDK 로드 보장
       try {
@@ -417,6 +548,9 @@ const Main = () => {
         console.log("⚠️ [세션 만료] 로그인이 만료되었습니다");
         setIsLoggedIn(false);
         
+        // 로그아웃 시 위치 조회 타임스탬프 제거하여 다음 로그인 시 위치를 다시 조회하도록 함
+        localStorage.removeItem("lastLocationFetchTime");
+        
         // 로그인 상태였다가 만료된 경우에만 알림 표시 후 로그인 페이지로 이동
         if (wasLoggedIn) {
           toast({
@@ -433,141 +567,31 @@ const Main = () => {
         console.log("✅ [세션 유지/갱신] 로그인 상태 유지");
         setIsLoggedIn(true);
         
-        // 처음 로그인한 경우에만 위치 정보 확인 (TOKEN_REFRESHED는 제외)
-        // 직접 설정한 위치가 있으면 사용하고, 없을 때만 브라우저 위치 가져오기
-        if (event === "SIGNED_IN" && session) {
-          let savedCoordinates = localStorage.getItem("currentCoordinates");
-          const savedLocation = localStorage.getItem("selectedLocation");
-          const isManualLocationValue = localStorage.getItem("isManualLocation") === "true";
+        // onAuthStateChange에서는 위치를 조회하지 않음
+        // 위치 조회는 checkAuthAndInitLocation에서만 수행됨 (앱 실행 시에만)
+        // 단, 저장된 위치 정보가 있으면 상태만 업데이트
+        const savedLocation = localStorage.getItem("selectedLocation");
+        const savedCoordinates = localStorage.getItem("currentCoordinates");
+        const isManualLocationValue = localStorage.getItem("isManualLocation") === "true";
+        
+        if (savedLocation || savedCoordinates) {
           setIsManualLocation(isManualLocationValue);
-          
-          // 사용자가 직접 설정한 위치가 있으면 그것을 사용 (현재 위치를 불러오지 않음)
-          if (isManualLocationValue) {
-            // savedLocation이 없는 경우 처리
-            if (!savedLocation) {
-              console.warn("⚠️ [세션 갱신] 사용자 위치 설정 플래그는 있지만 저장된 위치가 없음");
-              setCurrentLocation("위치 불러올 수 없음");
-              setIsLoadingLocation(false);
-              return; // 사용자 위치 설정이므로 현재 위치 가져오기 건너뛰기
-            }
-            
-            // 좌표가 있으면 바로 사용
-            if (savedCoordinates) {
-              try {
-                const coords = JSON.parse(savedCoordinates);
-                const { latitude, longitude } = coords;
-                
-                // 좌표 유효성 검사
-                if (typeof latitude === 'number' && typeof longitude === 'number' && 
-                    !isNaN(latitude) && !isNaN(longitude) &&
-                    latitude >= -90 && latitude <= 90 &&
-                    longitude >= -180 && longitude <= 180) {
-                  
-                  console.log("✅ [세션 갱신] 직접 설정한 위치 사용:", { latitude, longitude, location: savedLocation });
-                  
-                  // 저장된 위치를 ~시 ~동 형식으로 변환하여 표시
-                  try {
-                    const formattedAddress = await getAddressFromCoords(latitude, longitude);
-                    setCurrentLocation(formattedAddress);
-                    localStorage.setItem("selectedLocation", formattedAddress);
-                  } catch (error) {
-                    console.error("주소 변환 오류:", error);
-                    setCurrentLocation(savedLocation);
-                  }
-                  setIsManualLocation(true);
-                  setCurrentCoords({ latitude, longitude });
-                  setIsLoadingLocation(false);
-                  await fetchNearbyStores(latitude, longitude);
-                  return; // 직접 설정한 위치를 사용했으므로 현재 위치 가져오기 건너뛰기
-                } else {
-                  console.warn("⚠️ [세션 갱신] 저장된 좌표가 유효하지 않음:", { latitude, longitude });
-                  // 유효하지 않은 좌표는 제거하고 주소 검색으로 좌표 가져오기
-                  localStorage.removeItem("currentCoordinates");
-                  savedCoordinates = null; // 변수 업데이트하여 fallback 로직이 실행되도록 함
-                }
-              } catch (error) {
-                console.error("❌ [세션 갱신] 저장된 좌표 파싱 오류:", error);
-                // 저장된 좌표가 잘못되었으면 제거하고 주소 검색으로 좌표 가져오기
-                localStorage.removeItem("currentCoordinates");
-                savedCoordinates = null; // 변수 업데이트하여 fallback 로직이 실행되도록 함
-              }
-            }
-            
-            // 좌표가 없으면 주소 검색으로 좌표 가져오기 (최근 위치 선택 시)
-            if (!savedCoordinates) {
-              try {
-                console.log("🔍 [세션 갱신] 주소 검색으로 좌표 가져오기:", savedLocation);
-                const { searchAddress } = await import("@/lib/kakao");
-                const searchResult = await searchAddress(savedLocation);
-                
-                if (searchResult.documents && searchResult.documents.length > 0) {
-                  const firstResult = searchResult.documents[0];
-                  const latitude = parseFloat(firstResult.y);
-                  const longitude = parseFloat(firstResult.x);
-                  
-                  // 좌표 저장
-                  localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-                  
-                  console.log("✅ [세션 갱신] 주소 검색으로 좌표 획득:", { latitude, longitude });
-                  
-                  // 저장된 위치를 ~시 ~동 형식으로 변환하여 표시
-                  try {
-                    const formattedAddress = await getAddressFromCoords(latitude, longitude);
-                    setCurrentLocation(formattedAddress);
-                    localStorage.setItem("selectedLocation", formattedAddress);
-                  } catch (error) {
-                    console.error("주소 변환 오류:", error);
-                    setCurrentLocation(savedLocation);
-                  }
-                  setIsManualLocation(true);
-                  setCurrentCoords({ latitude, longitude });
-                  setIsLoadingLocation(false);
-                  
-                  // 매장 정보 가져오기
-                  await fetchNearbyStores(latitude, longitude);
-                  return; // 직접 설정한 위치를 사용했으므로 현재 위치 가져오기 건너뛰기
-                } else {
-                  console.warn("⚠️ [세션 갱신] 주소 검색 결과 없음:", savedLocation);
-                  // 이전 사용자 위치값 표시
-                  setCurrentLocation(savedLocation || "위치 불러올 수 없음");
-                  setIsLoadingLocation(false);
-                  return; // 수동 위치 설정이므로 브라우저 위치 가져오기 건너뛰기
-                }
-              } catch (error) {
-                console.error("❌ [세션 갱신] 주소 검색 오류:", error);
-                // 이전 사용자 위치값 표시
-                setCurrentLocation(savedLocation || "위치 불러올 수 없음");
-                setIsLoadingLocation(false);
-                return; // 수동 위치 설정이므로 브라우저 위치 가져오기 건너뛰기
-              }
-            }
-            
-            return; // 사용자 위치 설정을 처리했으므로 현재 위치 가져오기 건너뛰기
+          if (savedLocation) {
+            setCurrentLocation(savedLocation);
           }
-          
-          // 사용자가 직접 설정한 위치가 없으면 현재 위치 가져오기
-          if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-              async (position) => {
-                const { latitude, longitude } = position.coords;
-                const address = await getAddressFromCoords(latitude, longitude);
-                localStorage.setItem("selectedLocation", address);
-                localStorage.setItem("currentCoordinates", JSON.stringify({ latitude, longitude }));
-                localStorage.removeItem("isManualLocation"); // 현재 위치는 수동 설정이 아님
-                setIsManualLocation(false);
-                setCurrentLocation(address);
+          if (savedCoordinates) {
+            try {
+              const coords = JSON.parse(savedCoordinates);
+              const { latitude, longitude } = coords;
+              if (typeof latitude === 'number' && typeof longitude === 'number' && 
+                  !isNaN(latitude) && !isNaN(longitude) &&
+                  latitude >= -90 && latitude <= 90 &&
+                  longitude >= -180 && longitude <= 180) {
                 setCurrentCoords({ latitude, longitude });
-                await fetchNearbyStores(latitude, longitude);
-              },
-              (error) => {
-                // 이전 사용자 위치값 표시
-                const previousLocation = localStorage.getItem("selectedLocation");
-                setCurrentLocation(previousLocation || "위치 불러올 수 없음");
-                // localStorage는 유지 (이전 위치값을 보여주기 위해)
-                setIsManualLocation(false);
-              },
-              { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-            );
+              }
+            } catch (error) {
+              console.error("❌ [세션 갱신] 저장된 좌표 파싱 오류:", error);
+            }
           }
         }
       }
@@ -589,6 +613,22 @@ const Main = () => {
       });
       return;
     }
+    
+    console.log("🔄🔄🔄 [수동 새로고침] 위치 재조회 시작 🔄🔄🔄");
+
+    console.log("🔄 [수동 새로고침 전] localStorage 상태:", Object.keys(localStorage).filter(key => key.includes('location') || key.includes('Location')).reduce((obj, key) => {
+      obj[key] = localStorage.getItem(key);
+      return obj;
+    }, {} as Record<string, string | null>));
+    
+    // 수동 새로고침 시 타임스탬프 업데이트하여 위치를 새로 조회
+    const refreshTimestamp = Date.now();
+    const refreshTimestampString = refreshTimestamp.toString();
+    localStorage.setItem("lastLocationFetchTime", refreshTimestampString);
+    console.log("✅ [수동 새로고침] 타임스탬프 업데이트:", refreshTimestamp, "(문자열:", refreshTimestampString, ")");
+
+    const refreshedValue = localStorage.getItem("lastLocationFetchTime");
+    console.log("✅ [수동 새로고침 후] localStorage에서 읽은 값:", refreshedValue, "(일치:", refreshedValue === refreshTimestampString ? "✅" : "❌", ")");
     
     setIsLoadingLocation(true);
     setCurrentLocation("위치 확인 중...");

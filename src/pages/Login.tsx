@@ -58,6 +58,10 @@ const Login = () => {
       const currentOrigin = window.location.origin;
       const isLocalhost = currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1');
       
+      // 모바일 환경 감지 (React Native WebView 또는 모바일 브라우저)
+      const isMobile = (window as any).isReactNative || 
+                       /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
       // localhost인 경우 무조건 현재 브라우저의 origin 사용 (환경 변수 무시)
       // 배포 환경인 경우 환경 변수 또는 현재 origin 사용
       let siteUrl: string;
@@ -87,11 +91,17 @@ const Login = () => {
       console.log('  - 최종 사용 siteUrl:', siteUrl);
       console.log('  - redirectTo URL:', redirectUrl);
       console.log('  - localhost 여부:', isLocalhost);
+      console.log('  - 모바일 환경 여부:', isMobile);
+      console.log('  - User-Agent:', navigator.userAgent);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'kakao',
         options: {
           redirectTo: redirectUrl,
+          // 모바일 환경에서 카카오 앱 로그인 옵션 활성화를 위한 쿼리 파라미터
+          queryParams: isMobile ? {
+            prompt: 'select_account',
+          } : {},
         },
       });
       

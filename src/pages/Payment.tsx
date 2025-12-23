@@ -2197,6 +2197,22 @@ const Payment = () => {
       }
       console.log("판매완료 변경 성공");
 
+      // gifticons 테이블의 상태도 판매완료로 업데이트 (id로 조인)
+      const { error: updateGifticonsError } = await supabase
+        .from('gifticons')
+        .update({ 
+          status: '판매완료',
+          is_selling: false 
+        })
+        .in('id', newReservedIds);
+
+      if (updateGifticonsError) {
+        console.error("gifticons 판매완료 변경 오류:", updateGifticonsError);
+        // 에러가 발생해도 계속 진행 (used_gifticons는 이미 업데이트됨)
+      } else {
+        console.log("gifticons 판매완료 변경 성공");
+      }
+
       // gifticons 테이블에 구매한 기프티콘 추가
       if (typedGifticonsData && typedGifticonsData.length > 0) {
         const gifticonsToInsert = typedGifticonsData.map((item) => ({
