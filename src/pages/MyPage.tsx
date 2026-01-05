@@ -1,8 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { ChevronRight, History, Settings, LogOut, Package, Zap, Ticket } from "lucide-react";
+import { ChevronRight, History, Settings, LogOut, Package, Zap, Ticket, BookOpen } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -119,11 +118,16 @@ const MyPage = () => {
     }
   };
 
+  const handleTutorial = () => {
+    navigate("/tutorial");
+  };
+
   const menuItems = [
     { icon: History, label: "결제 내역", path: "/history" },
     { icon: Zap, label: "원터치 결제", path: "/one-touch-payment" },
     { icon: Ticket, label: "할인쿠폰", path: "/discount-coupon" },
     { icon: Settings, label: "현장 결제 수단", path: "/payment-methods" },
+    { icon: Package, label: "멤버십 관리", path: "/membership-management" },
     { icon: Settings, label: "설정", path: "/settings" },
   ];
 
@@ -142,16 +146,9 @@ const MyPage = () => {
       <main className="max-w-md mx-auto px-4 py-6">
         {/* Profile Section */}
         <Card className="p-6 mb-6 rounded-2xl border-border/50">
-          <div className="flex items-center gap-4 mb-6">
-            <Avatar className="w-16 h-16">
-              <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground text-xl font-bold">
-                {userName.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <h2 className="text-xl font-bold mb-1">{userName}님</h2>
-              <p className="text-sm text-muted-foreground">{userEmail}</p>
-            </div>
+          <div className="mb-6">
+            <h2 className="text-xl font-bold mb-1">{userName}님</h2>
+            <p className="text-sm text-muted-foreground">{userEmail}</p>
           </div>
 
           {/* Total Discount */}
@@ -160,6 +157,22 @@ const MyPage = () => {
               총 {totalDiscount.toLocaleString()}원 할인받았어요!
             </p>
           </div>
+        </Card>
+
+        {/* 튜토리얼 해보기 버튼 */}
+        <Card className="mb-6 rounded-xl border-border/50 overflow-hidden">
+          <button
+            onClick={handleTutorial}
+            className="w-full group p-4 flex items-center justify-between hover:bg-primary transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 group-hover:bg-white/20 flex items-center justify-center transition-colors">
+                <BookOpen className="w-5 h-5 text-primary group-hover:text-white transition-colors" />
+              </div>
+              <span className="font-medium group-hover:text-white transition-colors">튜토리얼 해보기</span>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-white transition-colors" />
+          </button>
         </Card>
 
         {/* Menu Items */}

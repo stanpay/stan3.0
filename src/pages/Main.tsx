@@ -7,6 +7,9 @@ import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import TutorialModal from "@/components/TutorialModal";
+import FirstPurchaseBanner from "@/components/FirstPurchaseBanner";
+import { shouldShowTutorial } from "@/lib/tutorial";
 
 const Main = () => {
   const { toast } = useToast();
@@ -41,6 +44,8 @@ const Main = () => {
   const [isLoadingMoreStores, setIsLoadingMoreStores] = useState(false);
   const [currentCoords, setCurrentCoords] = useState<{latitude: number, longitude: number} | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showTutorialModal, setShowTutorialModal] = useState(false);
+  const [hasPaymentHistory, setHasPaymentHistory] = useState<boolean | null>(null);
 
   const getAddressFromCoords = async (latitude: number, longitude: number) => {
     try {
@@ -169,6 +174,24 @@ const Main = () => {
         console.log("🔐 [인증 필요] 로그인 페이지로 리다이렉트");
         navigate("/");
         return;
+      }
+
+      // 튜토리얼 모달 표시 여부 확인 (결제 이력 없고 완료 안 한 경우)
+      try {
+        const { data: paymentHistory, error: paymentError } = await supabase
+          .from('payment_history')
+          .select('id')
+          .eq('user_id', session.user.id)
+          .limit(1);
+
+        const paymentHistoryExists = !paymentError && paymentHistory && paymentHistory.length > 0;
+        setHasPaymentHistory(paymentHistoryExists);
+        const needTutorial = await shouldShowTutorial(paymentHistoryExists);
+        if (needTutorial) {
+          setShowTutorialModal(true);
+        }
+      } catch (error) {
+        console.error("튜토리얼 모달 표시 판단 실패:", error);
       }
 
       // 최근 위치 조회 시간 확인 (5분 이내면 재조회 하지 않음)
@@ -1344,6 +1367,11 @@ const Main = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20">
+      <TutorialModal 
+        open={showTutorialModal} 
+        onClose={() => setShowTutorialModal(false)}
+      />
+      {hasPaymentHistory === false && <FirstPurchaseBanner />}
       {/* Header */}
       <header className="sticky top-0 z-40 bg-card border-b border-border/50 backdrop-blur-sm bg-opacity-95">
         <div className="max-w-md mx-auto px-4 py-4">

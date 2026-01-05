@@ -7,9 +7,13 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
 import Login from "./pages/Login";
 import Main from "./pages/Main";
+import TutorialMain from "./pages/TutorialMain";
 import Location from "./pages/Location";
 import Sell from "./pages/Sell";
+import SellResult from "./pages/SellResult";
+import SellResultDetail from "./pages/SellResultDetail";
 import Payment from "./pages/Payment";
+import TutorialPayment from "./pages/TutorialPayment";
 import MyPage from "./pages/MyPage";
 import MyGifticons from "./pages/MyGifticons";
 import History from "./pages/History";
@@ -23,6 +27,7 @@ import NotFound from "./pages/NotFound";
 import ChatSupport from "./components/ChatSupport";
 import AdminLogin from "./pages/Admin/AdminLogin";
 import AdminDashboard from "./pages/Admin/AdminDashboard";
+import MembershipManagement from "./pages/MembershipManagement";
 
 const queryClient = new QueryClient();
 
@@ -40,15 +45,20 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/main" element={<ProtectedRoute><Main /></ProtectedRoute>} />
+          <Route path="/tutorial" element={<ProtectedRoute><TutorialMain /></ProtectedRoute>} />
           <Route path="/location" element={<ProtectedRoute><Location /></ProtectedRoute>} />
           <Route path="/sell" element={<ProtectedRoute><Sell /></ProtectedRoute>} />
+          <Route path="/sell/result/:jobId" element={<ProtectedRoute><SellResult /></ProtectedRoute>} />
+          <Route path="/sell/result/:jobId/detail" element={<ProtectedRoute><SellResultDetail /></ProtectedRoute>} />
           <Route path="/payment/:storeId" element={<ProtectedRoute><Payment /></ProtectedRoute>} />
+          <Route path="/tutorial/payment/:storeId" element={<ProtectedRoute><TutorialPayment /></ProtectedRoute>} />
           <Route path="/mypage" element={<ProtectedRoute><MyPage /></ProtectedRoute>} />
           <Route path="/my-gifticons" element={<ProtectedRoute><MyGifticons /></ProtectedRoute>} />
           <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
           <Route path="/one-touch-payment" element={<ProtectedRoute><OneTouchPayment /></ProtectedRoute>} />
           <Route path="/discount-coupon" element={<ProtectedRoute><DiscountCoupon /></ProtectedRoute>} />
           <Route path="/payment-methods" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
+          <Route path="/membership-management" element={<ProtectedRoute><MembershipManagement /></ProtectedRoute>} />
           <Route path="/callback-auth" element={<CallbackAuth />} />
           <Route path="/payment-success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
           <Route path="/payment-fail" element={<ProtectedRoute><PaymentFail /></ProtectedRoute>} />

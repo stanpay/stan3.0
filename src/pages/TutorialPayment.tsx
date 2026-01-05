@@ -10,11 +10,38 @@ import { Link, useParams, useNavigate, useSearchParams, useLocation } from "reac
 import { toast } from "sonner";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { supabase } from "@/integrations/supabase/client";
+// import { supabase } from "@/integrations/supabase/client";
+const supabase = {
+  auth: {
+    getSession: async () => ({ data: { session: { user: { id: "mock-user-id" } } }, error: null }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+  },
+  from: () => ({
+    select: () => ({
+      eq: () => ({
+        single: async () => ({ data: null, error: null }),
+        limit: () => ({ single: async () => ({ data: null, error: null }) }),
+        in: async () => ({ data: [], error: null }),
+      }),
+      in: async () => ({ data: [], error: null }),
+    }),
+    update: () => ({
+      eq: () => ({
+        eq: async () => ({ data: null, error: null }),
+        in: async () => ({ data: null, error: null }),
+      }),
+      in: async () => ({ data: null, error: null }),
+    }),
+    insert: async () => ({ data: null, error: null }),
+  }),
+} as any;
 import JsBarcode from "jsbarcode";
 import { initPaymentWidget, generateOrderId } from "@/lib/tossPayments";
-import { cn } from "@/lib/utils";
+import TutorialBanner from "@/components/TutorialBanner";
+import TutorialGuide from "@/components/TutorialGuide";
+import TutorialPointer from "@/components/TutorialPointer";
 import FirstPurchaseBanner from "@/components/FirstPurchaseBanner";
+import { setTutorialStep, completeTutorial } from "@/lib/tutorial";
 
 interface UsedGifticon {
   id: string;
@@ -177,11 +204,12 @@ const formatNumberWithCommas = (value: string | number | null): string => {
   return parseInt(numStr, 10).toLocaleString("ko-KR");
 };
 
-const Payment = () => {
+const TutorialPayment = () => {
   const { storeId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const isTutorial = location.pathname.includes("/tutorial");
   const [step, setStep] = useState<1 | 2 | 3>(1); // 1: 기프티콘 선택, 2: 결제 수단 선택, 3: 바코드
   const [gifticons, setGifticons] = useState<UsedGifticon[]>([]);
   const [selectedGifticons, setSelectedGifticons] = useState<Map<string, SelectedGifticon>>(new Map());
@@ -197,7 +225,7 @@ const Payment = () => {
   // 추가 로드 중인 기프티콘 ID 추적 (중복 호출 방지)
   const loadingGifticonIds = useRef<Set<string>>(new Set());
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [actualStoreName, setActualStoreName] = useState<string>("");
   const [recentlyPurchasedCount, setRecentlyPurchasedCount] = useState<number>(0);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
@@ -224,19 +252,31 @@ const Payment = () => {
   const [selectedPaymentOptions, setSelectedPaymentOptions] = useState<Set<string>>(new Set());
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState<boolean>(true);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
-  const [isStoreNameLoaded, setIsStoreNameLoaded] = useState<boolean>(false);
   const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState<boolean>(false);
-  const [hasUserSelectedPaymentMethodManually, setHasUserSelectedPaymentMethodManually] = useState<boolean>(false);
   const [inputBudget, setInputBudget] = useState<number | null>(null); // 입력된 예산
   const [isAutoSelectMode, setIsAutoSelectMode] = useState<boolean>(false); // 자동선택 모드 여부
   const [autoSelectedGifticons, setAutoSelectedGifticons] = useState<UsedGifticon[]>([]); // 자동선택 모드의 기프티콘 목록
   
-  const totalSummaryRef = useRef<HTMLDivElement>(null);
-  const membershipCardRef = useRef<HTMLDivElement>(null);
+  // 튜토리얼 관련 state
+  const [showGifticonGuide, setShowGifticonGuide] = useState(false);
+  const [showPaymentGuide, setShowPaymentGuide] = useState(false);
+  const [showConfirmPointer, setShowConfirmPointer] = useState(false);
+  const [showBarcodeGuide, setShowBarcodeGuide] = useState(false);
+  const [showMembershipGuide, setShowMembershipGuide] = useState(false);
+  const [showMembershipBarcodeGuide, setShowMembershipBarcodeGuide] = useState(false);
+  const [showPayAppGuide, setShowPayAppGuide] = useState(false);
+  const [showPaymentCompleteGuide, setShowPaymentCompleteGuide] = useState(false);
+  const [isTutorialCompleteModalOpen, setIsTutorialCompleteModalOpen] = useState(false);
+  
+  const gifticonGuideRef = useRef<HTMLDivElement>(null);
+  const paymentButtonRef = useRef<HTMLButtonElement>(null);
   const membershipAppRef = useRef<HTMLButtonElement>(null);
+  const membershipCardRef = useRef<HTMLDivElement>(null);
   const membershipBarcodeRef = useRef<HTMLDivElement>(null);
   const payAppButtonRef = useRef<HTMLButtonElement>(null);
   const paymentCompleteButtonRef = useRef<HTMLButtonElement>(null);
+  const totalSummaryRef = useRef<HTMLDivElement>(null);
+  const barcodeRef = useRef<HTMLDivElement>(null);
   const [paymentWidgets, setPaymentWidgets] = useState<any>(null); // 결제위젯 인스턴스
   const [isWidgetRendered, setIsWidgetRendered] = useState<boolean>(false); // 위젯 렌더링 상태
   const widgetInstanceRef = useRef<any>(null); // 위젯 인스턴스 캐싱
@@ -381,15 +421,13 @@ const Payment = () => {
   };
 
   const handleMembershipAppCallout = () => {
-    setMembershipModalOpen(true);
-    const link = membershipDeepLinks[storeId || ""];
-    if (!link) {
-      toast.info("관련 앱 링크가 없습니다.");
-    }
+    // 튜토리얼 모드에서는 기능 비활성화
+    return;
   };
 
   const triggerMembershipUpload = () => {
-    fileInputRef.current?.click();
+    // 튜토리얼 모드에서는 기능 비활성화
+    return;
   };
 
   const handleConfirmMembershipLaunch = () => {
@@ -403,503 +441,91 @@ const Payment = () => {
     setMembershipModalOpen(false);
   };
 
-  // URL 쿼리 파라미터로 step 관리 (뒤로가기 지원)
+  // URL 쿼리 파라미터로 step 관리 (튜토리얼용 단순화)
   useEffect(() => {
     const stepParam = searchParams.get('step');
-    const paymentSuccess = sessionStorage.getItem('payment_success');
-    
-    if (paymentSuccess === 'true') {
-      // 결제 성공 후 돌아온 경우 - 바코드 페이지로
+    if (stepParam === '3') {
       setStep(3);
-      sessionStorage.removeItem('payment_success');
-      toast.success('결제가 완료되었습니다! 바코드를 매장에 제시하세요.');
-    } else if (stepParam === '3') {
-      setStep(3);
-    } else if (stepParam === '2') {
-      // Step 2로 이동 - 주문 정보가 있는지 확인
-      const orderDataStr = sessionStorage.getItem('toss_payment_order');
-      if (orderDataStr) {
-        setStep(2);
-      } else {
-        // 주문 정보가 없으면 Step 1로
-        console.warn('주문 정보가 없습니다. Step 1로 이동합니다.');
-        navigate(`/payment/${storeId}`, { replace: true });
-      }
     } else {
-      // 기본값은 Step 1
       setStep(1);
     }
-  }, [searchParams, storeId, navigate]);
+  }, [searchParams]);
 
-  // Step 2 진입 시 결제위젯 렌더링
+  // Step 2 진입 시 결제위젯 렌더링 (튜토리얼에서는 비활성화)
   useEffect(() => {
-    if (step !== 2) {
-      // Step 2가 아니면 완전히 정리
-      const paymentMethodEl = document.querySelector("#payment-method");
-      const agreementEl = document.querySelector("#agreement");
-      
-      if (paymentMethodEl) paymentMethodEl.innerHTML = '';
-      if (agreementEl) agreementEl.innerHTML = '';
-      
-      setIsWidgetRendered(false);
-      setPaymentWidgets(null);
-      widgetInstanceRef.current = null;
-      
-      console.log('🧹 결제위젯 cleanup 완료');
-      return;
-    }
+    // 비활성화
+  }, []);
 
-    // 이미 렌더링된 경우 재렌더링하지 않음
-    if (isWidgetRendered && paymentWidgets) {
-      console.log('✅ 결제위젯 이미 렌더링됨 - 재사용');
-      return;
-    }
-
-    const renderPaymentWidget = async () => {
-      const renderStart = performance.now();
-      
-      try {
-        const orderDataStr = sessionStorage.getItem('toss_payment_order');
-        if (!orderDataStr) {
-          console.error('주문 정보를 찾을 수 없습니다.');
-          navigate(`/payment/${storeId}`, { replace: true });
-          return;
-        }
-
-        const orderData = JSON.parse(orderDataStr);
-        
-        // DOM 완전히 비우기 (중복 렌더링 방지)
-        console.log('🧹 DOM 초기화 시작');
-        const paymentMethodEl = document.querySelector("#payment-method");
-        const agreementEl = document.querySelector("#agreement");
-        
-        if (paymentMethodEl) paymentMethodEl.innerHTML = '';
-        if (agreementEl) agreementEl.innerHTML = '';
-        
-        // 이전 인스턴스 완전히 제거
-        widgetInstanceRef.current = null;
-        
-        // DOM 준비 대기 (최소화)
-        await new Promise(resolve => requestAnimationFrame(resolve));
-        
-        // 항상 새 위젯 인스턴스 생성
-        console.log('🔵 결제위젯 초기화 시작');
-        const initStart = performance.now();
-        
-        // 타임아웃 설정 (10초 이상 걸리면 재시도)
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('위젯 초기화 타임아웃')), 10000);
-        });
-        
-        const widgets = await Promise.race([
-          initPaymentWidget(orderData.customerKey),
-          timeoutPromise
-        ]) as any;
-        
-        const initTime = Math.round(performance.now() - initStart);
-        console.log(`✅ 결제위젯 초기화 완료 (${initTime}ms)`);
-        
-        // 결제 금액 설정
-        await widgets.setAmount({
-          currency: "KRW",
-          value: orderData.amount,
-        });
-
-        // 결제 UI 순차 렌더링 (점진적 표시)
-        console.log('🔵 결제 UI 렌더링 시작');
-        const uiStart = performance.now();
-        
-        // 결제 수단 먼저 렌더링
-        console.log('🔵 결제 수단 렌더링 중...');
-        const methodStart = performance.now();
-        await widgets.renderPaymentMethods({
-          selector: "#payment-method",
-          variantKey: "DEFAULT",
-        });
-        const methodTime = Math.round(performance.now() - methodStart);
-        console.log(`✅ 결제 수단 렌더링 완료 (${methodTime}ms)`);
-        
-        // 약관 렌더링
-        console.log('🔵 약관 렌더링 중...');
-        const agreementStart = performance.now();
-        await widgets.renderAgreement({
-          selector: "#agreement",
-          variantKey: "AGREEMENT",
-        });
-        const agreementTime = Math.round(performance.now() - agreementStart);
-        console.log(`✅ 약관 렌더링 완료 (${agreementTime}ms)`);
-        
-        const uiTime = Math.round(performance.now() - uiStart);
-        
-        // 위젯 인스턴스 저장
-        widgetInstanceRef.current = widgets;
-        setPaymentWidgets(widgets);
-        setIsWidgetRendered(true);
-        
-        const totalTime = Math.round(performance.now() - renderStart);
-        console.log(`✅ 결제위젯 렌더링 완료 - UI: ${uiTime}ms, 총: ${totalTime}ms`);
-
-      } catch (error: any) {
-        console.error('결제위젯 렌더링 오류:', error);
-        
-        // 모든 에러에 대해 처리
-        const errorMsg = error.message || '';
-        
-        if (errorMsg.includes('타임아웃')) {
-          toast.error('네트워크가 느립니다. 다시 시도하고 있습니다...');
-          
-          // 타임아웃 시 한 번 더 재시도
-          try {
-            console.log('🔄 결제위젯 재시도 시작');
-            const retryStart = performance.now();
-            const widgets = await initPaymentWidget(orderData.customerKey);
-            const retryTime = Math.round(performance.now() - retryStart);
-            console.log(`✅ 결제위젯 재시도 성공 (${retryTime}ms)`);
-            
-            await widgets.setAmount({
-              currency: "KRW",
-              value: orderData.amount,
-            });
-
-            await Promise.all([
-              widgets.renderPaymentMethods({
-                selector: "#payment-method",
-                variantKey: "DEFAULT",
-              }),
-              widgets.renderAgreement({
-                selector: "#agreement",
-                variantKey: "AGREEMENT",
-              }),
-            ]);
-
-            widgetInstanceRef.current = widgets;
-            setPaymentWidgets(widgets);
-            setIsWidgetRendered(true);
-            
-            toast.success('결제 화면을 불러왔습니다.');
-            return;
-          } catch (retryError) {
-            console.error('결제위젯 재시도 실패:', retryError);
-            toast.error('네트워크 연결을 확인해주세요.');
-          }
-        } else if (errorMsg.includes('하나의') || errorMsg.includes('알 수 없는')) {
-          toast.error('결제 화면 준비 중입니다. 잠시 후 다시 시도해주세요.');
-        } else {
-          toast.error('결제 화면을 불러오는데 실패했습니다.');
-        }
-        
-        // DOM과 상태 완전 초기화
-        const paymentMethodEl = document.querySelector("#payment-method");
-        const agreementEl = document.querySelector("#agreement");
-        if (paymentMethodEl) paymentMethodEl.innerHTML = '';
-        if (agreementEl) agreementEl.innerHTML = '';
-        
-        widgetInstanceRef.current = null;
-        setIsWidgetRendered(false);
-        setPaymentWidgets(null);
-        
-        // Step 1로 복귀
-        setTimeout(() => {
-          navigate(`/payment/${storeId}`, { replace: true });
-        }, 1000);
-      }
-    };
-
-    renderPaymentWidget();
-  }, [step, storeId, navigate, isWidgetRendered, paymentWidgets]);
-
-  // 실제 매장명 조회 및 브랜드 설정 (Main 페이지에서 넘어온 매장명 매칭)
+  // 실제 매장명 조회 및 브랜드 설정 (튜토리얼용 가짜 데이터)
   useEffect(() => {
-    const fetchStoreName = async () => {
-      if (!storeId) {
-        setActualStoreName("매장");
-        setStoreBrand("");
-        return;
-      }
+    setActualStoreName("스타벅스 역삼역점");
+    setStoreBrand("스타벅스");
+  }, []);
 
-      try {
-        // 1. localStorage에서 매장 정보 확인 (Main 페이지에서 저장한 경우) - 우선순위 1
-        const storedStores = localStorage.getItem('nearbyStores');
-        if (storedStores) {
-          try {
-            const stores = JSON.parse(storedStores);
-            // storeId와 정확히 일치하는 매장 찾기
-            const store = stores.find((s: any) => String(s.id) === String(storeId));
-            if (store) {
-              if (store.name) {
-                setActualStoreName(store.name);
-              }
-              // 매장의 image 필드를 브랜드명으로 변환
-              if (store.image && storeNames[store.image]) {
-                setStoreBrand(storeNames[store.image]);
-              } else if (store.image) {
-                // storeNames에 없는 경우 image 값을 그대로 사용 (한글인 경우)
-                setStoreBrand(store.image);
-              }
-              return;
-            }
-          } catch (e) {
-            console.error("localStorage 파싱 오류:", e);
-          }
-        }
-
-        // 2. storeNames에서 브랜드명 매핑 확인 - 우선순위 2
-        if (storeNames[storeId]) {
-          setActualStoreName(storeNames[storeId]);
-          setStoreBrand(storeNames[storeId]);
-          return;
-        }
-
-        // 3. 기본값
-        setActualStoreName("매장");
-        setStoreBrand("");
-      } finally {
-        setIsStoreNameLoaded(true);
-      }
-    };
-
-    fetchStoreName();
-  }, [storeId]);
-
-  // 프랜차이즈 및 매장 정보 조회 (병렬 처리로 최적화)
+  // 프랜차이즈 및 매장 정보 조회 (튜토리얼용 고정 데이터)
   useEffect(() => {
-    const fetchFranchiseAndStoreInfo = async () => {
-      if (!storeBrand) {
-        // 브랜드 정보가 없어도 매장 정보는 기본값으로 설정하여 로딩이 완료될 수 있도록 함
-        setStoreInfo({
-          gifticon_available: false,
-          local_currency_available: false,
-          local_currency_discount_rate: null,
-          parking_available: false,
-          free_parking: false,
-          parking_size: null,
-        });
-        setIsLoadingPaymentMethods(false);
-        setIsLoadingStoreInfo(false);
-        return;
+    setStoreInfo({
+      gifticon_available: true,
+      local_currency_available: false,
+      local_currency_discount_rate: null,
+      parking_available: true,
+      free_parking: true,
+      parking_size: "보통",
+    });
+    setFranchisePaymentMethods([
+      { method_name: "기프티콘", method_type: "할인", rate: 0 }
+    ]);
+    setSelectedPaymentOptions(new Set(['method-gifticon']));
+    setIsLoadingPaymentMethods(false);
+    setIsLoadingStoreInfo(false);
+  }, []);
+
+  // 기프티콘 목록 조회 (튜토리얼용 가짜 데이터)
+  useEffect(() => {
+    const mockGifticons: UsedGifticon[] = [
+      {
+        id: "mock-gifticon-1",
+        available_at: "스타벅스",
+        name: "3,000원 금액권",
+        expiry_date: "2026-12-31",
+        barcode: "1234567890123",
+        original_price: 3000,
+        sale_price: 2000,
+      },
+      {
+        id: "mock-gifticon-2",
+        available_at: "스타벅스",
+        name: "아메리카노 T",
+        expiry_date: "2026-12-31",
+        barcode: "9876543210987",
+        original_price: 4700,
+        sale_price: 3500,
       }
+    ];
+    setGifticons(mockGifticons);
+    setInitialGifticonIds(new Set(mockGifticons.map(g => g.id)));
+    updateGifticonsByPriceRange(mockGifticons);
+    setHasInitialDataLoaded(true);
+    setIsInitialLoading(false);
+    setIsLoading(false);
+  }, [updateGifticonsByPriceRange]);
 
-      setIsLoadingStoreInfo(true);
-
-      try {
-        // 1. 프랜차이즈 정보 조회
-        const franchisePromise = supabase
-          .from('franchises' as any)
-          .select('id')
-          .eq('name', storeBrand)
-          .single();
-
-        // 2. storeId가 UUID인 경우, 매장 정보를 병렬로 조회
-        const isUUID = storeId ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(storeId) : false;
-        
-        let storePromise = null;
-        if (storeId && isUUID) {
-          // UUID인 경우 프랜차이즈 정보와 병렬로 매장 정보 조회
-          storePromise = supabase
-            .from('stores' as any)
-            .select('gifticon_available, local_currency_available, local_currency_discount_rate, parking_available, free_parking, parking_size')
-            .eq('id', storeId)
-            .single();
-        }
-
-        // 프랜차이즈 정보와 매장 정보를 병렬로 기다림
-        const [franchiseResult, storeResult] = await Promise.all([
-          franchisePromise,
-          storePromise
-        ]);
-
-        const { data: franchiseData, error: franchiseError } = franchiseResult;
-
-        if (franchiseError && franchiseError.code !== 'PGRST116') {
-          console.error("프랜차이즈 조회 오류:", franchiseError);
-          setIsLoadingPaymentMethods(false);
-          setIsLoadingStoreInfo(false);
-          return;
-        }
-
-        if (franchiseData) {
-          setFranchiseId(franchiseData.id);
-
-          // 결제 방식 조회
-          const { data: paymentMethodsData, error: paymentMethodsError } = await supabase
-            .from('franchise_payment_methods' as any)
-            .select('method_name, method_type, rate')
-            .eq('franchise_id', franchiseData.id);
-
-          if (paymentMethodsError) {
-            console.error("결제 방식 조회 오류:", paymentMethodsError);
-            setIsLoadingPaymentMethods(false);
-          } else if (paymentMethodsData) {
-            setFranchisePaymentMethods(paymentMethodsData.map((pm: any) => ({
-              method_name: pm.method_name,
-              method_type: pm.method_type,
-              rate: pm.rate,
-            })));
-            setIsLoadingPaymentMethods(false);
-          } else {
-            setIsLoadingPaymentMethods(false);
-          }
-        } else {
-          // 프랜차이즈 데이터가 없는 경우 (DB에 등록되지 않은 브랜드)
-          setFranchiseId(null);
-          setFranchisePaymentMethods([]);
-          setIsLoadingPaymentMethods(false);
-        }
-
-        // 매장 정보 처리
-        if (storeId) {
-          if (isUUID && storeResult) {
-            // UUID인 경우, 이미 병렬로 가져온 결과 사용
-            const { data: storeData, error: storeError } = storeResult;
-            if (!storeError && storeData) {
-              setStoreInfo({
-                gifticon_available: storeData.gifticon_available || false,
-                local_currency_available: storeData.local_currency_available || false,
-                local_currency_discount_rate: storeData.local_currency_discount_rate || null,
-                parking_available: storeData.parking_available || false,
-                free_parking: storeData.free_parking || false,
-                parking_size: storeData.parking_size,
-              });
-            } else {
-              // 매장 정보가 없거나 오류인 경우 기본값
-              setStoreInfo({
-                gifticon_available: false,
-                local_currency_available: false,
-                local_currency_discount_rate: null,
-                parking_available: false,
-                free_parking: false,
-                parking_size: null,
-              });
-            }
-            setIsLoadingStoreInfo(false);
-          } else if (!isUUID && franchiseData) {
-            // 숫자인 경우, franchise_id로 조회
-            const { data: storeData, error: storeError } = await supabase
-              .from('stores' as any)
-              .select('gifticon_available, local_currency_available, local_currency_discount_rate, parking_available, free_parking, parking_size')
-              .eq('franchise_id', franchiseData.id)
-              .limit(1)
-              .single();
-
-            if (!storeError && storeData) {
-              setStoreInfo({
-                gifticon_available: storeData.gifticon_available || false,
-                local_currency_available: storeData.local_currency_available || false,
-                local_currency_discount_rate: storeData.local_currency_discount_rate || null,
-                parking_available: storeData.parking_available || false,
-                free_parking: storeData.free_parking || false,
-                parking_size: storeData.parking_size,
-              });
-            } else {
-              // 매장 정보가 없거나 오류인 경우 기본값
-              setStoreInfo({
-                gifticon_available: false,
-                local_currency_available: false,
-                local_currency_discount_rate: null,
-                parking_available: false,
-                free_parking: false,
-                parking_size: null,
-              });
-            }
-            setIsLoadingStoreInfo(false);
-          } else {
-            // 그 외의 경우 (franchiseData가 없거나 storeId가 숫자가 아닌 경우 등) 기본값
-            setStoreInfo({
-              gifticon_available: false,
-              local_currency_available: false,
-              local_currency_discount_rate: null,
-              parking_available: false,
-              free_parking: false,
-              parking_size: null,
-            });
-            setIsLoadingStoreInfo(false);
-          }
-        } else {
-          // storeId가 없는 경우 기본값
-          setStoreInfo({
-            gifticon_available: false,
-            local_currency_available: false,
-            local_currency_discount_rate: null,
-            parking_available: false,
-            free_parking: false,
-            parking_size: null,
-          });
-          setIsLoadingStoreInfo(false);
-        }
-      } catch (error) {
-        console.error("프랜차이즈/매장 정보 조회 오류:", error);
-        setIsLoadingPaymentMethods(false);
-        setIsLoadingStoreInfo(false);
-      }
-    };
-
-    fetchFranchiseAndStoreInfo();
-  }, [storeBrand, storeId]);
-
-  // 기프티콘 사용 가능 여부 계산 (결제 방식 생성 및 useEffect에서 사용)
-  const isGifticonAvailable = storeInfo?.gifticon_available || false;
+  // 기프티콘 사용 가능 여부 계산
+  const isGifticonAvailable = true;
   const hasGifticons = gifticons.length > 0;
-  const canUseGifticon = isGifticonAvailable && hasGifticons;
+  const canUseGifticon = hasGifticons;
 
-  // 동적 결제 방식 생성 (프랜차이즈 결제 방식 + 기프티콘 분리)
+  // 동적 결제 방식 생성 (기프티콘만 표시)
   const paymentMethods = useMemo(() => {
-    const methods: Array<{
-      id: string;
-      name: string;
-      enabled: boolean;
-      type: 'membership' | 'gifticon' | 'local_currency' | 'combined';
-      method_type?: string | null;
-      rate?: number | null;
-      gifticonDiscount?: number;
-      description?: string;
-    }> = [];
-
-    // 기프티콘 사용 가능 여부 및 최대 할인율 (이미 상단에서 계산됨)
-
-    // 프랜차이즈별 결제 방식 추가 (기프티콘과 분리)
-    // 멤버십 결제 방식은 목록에서 제외
-
-    // 기프티콘 결제 방식 추가 (항상 별도로 표시)
-    if (canUseGifticon) {
-      methods.push({
-        id: 'method-gifticon',
-        name: '기프티콘',
-        enabled: true,
-        type: 'gifticon',
-        gifticonDiscount: maxGifticonDiscount,
-        description: `기프티콘 ${maxGifticonDiscount}% 할인`,
-      });
-    }
-
-    // 지역화폐 사용 가능 여부에 따라 지역화폐 옵션 추가
-    if (storeInfo?.local_currency_available) {
-      const discountRate = storeInfo.local_currency_discount_rate;
-      const description = discountRate 
-        ? `지역화폐 ${discountRate}% 할인`
-        : "지역화폐 사용";
-      
-      methods.push({
-        id: 'method-local-currency',
-        name: '지역화폐',
-        enabled: true,
-        type: 'local_currency',
-        description: description,
-      });
-    }
-
-    // 초기 로딩 중이면 빈 배열 반환 (화면에 아무것도 표시하지 않음)
-    if (isInitialLoading) {
-      return [];
-    }
-
-    // 기본값 제거: 로딩 중이거나 정보가 없으면 빈 배열 반환
-    // 프랜차이즈 정보가 로딩 중이거나 없는 경우 빈 배열 반환하여 기본값이 표시되지 않도록 함
-    if (isLoadingPaymentMethods || (methods.length === 0 && !storeInfo)) {
-      return [];
-    }
-
-    return methods;
-  }, [franchisePaymentMethods, storeInfo, gifticons, maxGifticonDiscount, isLoadingPaymentMethods, isInitialLoading]);
+    return [{
+      id: 'method-gifticon',
+      name: '기프티콘',
+      enabled: true,
+      type: 'gifticon',
+      gifticonDiscount: maxGifticonDiscount,
+      description: `기프티콘 ${maxGifticonDiscount}% 할인`,
+    }];
+  }, [maxGifticonDiscount]);
 
 
   // 결제 방식 추천 ID 계산 (할인율이 가장 높은 것)
@@ -909,7 +535,6 @@ const Payment = () => {
     let bestId = null;
     let maxRate = -1;
 
-    // 추천 순위: 1. 할인율이 높은 것, 2. 할인율이 같다면 기프티콘 우선
     paymentMethods.forEach((method) => {
       if (!method.enabled) return;
       if (method.type === 'membership') return; // 멤버십은 추천에서 제외
@@ -921,28 +546,20 @@ const Payment = () => {
         currentRate = storeInfo?.local_currency_discount_rate || 0;
       }
 
-      // 할인율이 높거나, 같을 경우 기프티콘을 우선적으로 추천
-      if (currentRate > maxRate || (currentRate === maxRate && method.type === 'gifticon')) {
+      // 할인율/적립률이 0보다 큰 경우에만 추천 후보로 고려
+      if (currentRate > 0 && currentRate > maxRate) {
         maxRate = currentRate;
         bestId = method.id;
       }
     });
 
-    // 모든 할인율이 0이거나 추천 대상을 못 찾은 경우 첫 번째 결제 수단 선택
-    if (!bestId && paymentMethods.length > 0) {
-      const firstValid = paymentMethods.find(m => m.enabled && m.type !== 'membership');
-      if (firstValid) bestId = firstValid.id;
-    }
-
     return bestId;
   }, [paymentMethods, storeInfo]);
 
-  // 결제 방식 자동 선택 (할인율이 가장 높은 것)
+  // 결제 방식 자동 선택 (기프티콘 고정)
   useEffect(() => {
-    if (!isInitialLoading && recommendedMethodId && !hasUserSelectedPaymentMethodManually) {
-      setSelectedPaymentOptions(new Set([recommendedMethodId]));
-    }
-  }, [recommendedMethodId, hasUserSelectedPaymentMethodManually, isInitialLoading]);
+    setSelectedPaymentOptions(new Set(['method-gifticon']));
+  }, []);
 
   // 이전 로그인 상태를 추적하기 위한 ref 사용
   const prevSessionRef = useMemo(() => ({ current: null as any }), []);
@@ -1082,382 +699,105 @@ const Payment = () => {
     setSelectedCoupon(sortedCoupons[0]);
   }, [availableCoupons, totalCostBeforeCoupon, isCouponExpanded]);
 
-  // 로그인 상태 확인
+  // 로그인 상태 확인 (튜토리얼용 고정)
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const loggedIn = !!session;
-      setIsLoggedIn(loggedIn);
-
-      // 초기 세션 상태 저장
-      prevSessionRef.current = session;
-
-      // 결제 이력 확인
-      if (loggedIn && session?.user) {
-        try {
-          const { data: paymentHistory, error: paymentError } = await supabase
-            .from('payment_history')
-            .select('id')
-            .eq('user_id', session.user.id)
-            .limit(1);
-
-          const paymentHistoryExists = !paymentError && paymentHistory && paymentHistory.length > 0;
-          setHasPaymentHistory(paymentHistoryExists);
-        } catch (error) {
-          console.error("결제 이력 확인 오류:", error);
-        }
-      }
-
-      if (!loggedIn) {
-        // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
-        console.log("🔐 [Payment] 로그인 필요 - 로그인 페이지로 이동");
-        navigate("/");
-        return;
-      }
-    };
-    checkAuth();
+    setIsLoggedIn(true);
+    setHasPaymentHistory(false);
   }, []);
 
-  // 세션 만료 감지 및 로그아웃 처리
+  // 세션 만료 감지 (튜토리얼에서는 비활성화)
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      const wasLoggedIn = !!prevSessionRef.current;
-      const isNowLoggedIn = !!session;
-      
-      // INITIAL_SESSION 이벤트 처리: 세션이 없고 이전에 로그인 상태였다면 로그아웃으로 간주
-      if (event === "INITIAL_SESSION" && !session && wasLoggedIn) {
-        console.log("⚠️ [Payment] 세션 만료 - 로그인 페이지로 이동");
-        setIsLoggedIn(false);
-        
-        toast.error("세션이 만료되었습니다. 다시 로그인해주세요.");
-        
-        // 로그인 페이지로 리다이렉트
-        navigate("/");
-        prevSessionRef.current = null;
-        return;
+    // 비활성화
+  }, []);
+
+
+  // 기프티콘 선택 가이드 표시 (Step 1 진입 시)
+  useEffect(() => {
+    if (step === 1 && gifticons.length > 0) {
+      const timer = setTimeout(() => {
+        setShowGifticonGuide(true);
+        setTutorialStep("payment_gifticon_select");
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [step, gifticons.length]);
+
+  // 결제 버튼 가이드 표시 (기프티콘 선택 시)
+  useEffect(() => {
+    if (step === 1 && selectedGifticons.size > 0) {
+      setShowGifticonGuide(false);
+      setShowPaymentGuide(true);
+      setShowConfirmPointer(false);
+      setTutorialStep("payment_confirm");
+    }
+  }, [step, selectedGifticons.size]);
+
+  // 멤버십 앱 가이드 표시 시 해당 카드로 스크롤 제거 (바코드 페이지 스크롤 방지)
+  /* 
+  useEffect(() => {
+    if (showMembershipGuide && membershipCardRef.current) {
+      membershipCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [showMembershipGuide]);
+  */
+
+  // 확인 버튼 하이라이트 시작 후 포인터 생성
+  useEffect(() => {
+    if (showPaymentGuide && isTutorial && step === 1) {
+      // 하이라이트가 시작된 후 약간의 지연 후 포인터 표시
+      const timer = setTimeout(() => {
+        setShowConfirmPointer(true);
+      }, 300);
+      return () => {
+        clearTimeout(timer);
+        setShowConfirmPointer(false);
+      };
+    } else {
+      setShowConfirmPointer(false);
+    }
+  }, [showPaymentGuide, isTutorial, step]);
+
+  // 총 금액 섹션이 렌더링된 뒤 스크롤 (레이아웃 확장에 대응하여 다회 시도)
+  useEffect(() => {
+    if (!(step === 1 && showPaymentGuide && selectedGifticons.size > 0)) return;
+
+    const scrollToBottomWithRetries = (attempt = 0) => {
+      const scrollTarget = Math.max(
+        document.documentElement.scrollHeight,
+        document.body.scrollHeight
+      );
+      window.scrollTo({ top: scrollTarget, behavior: "smooth" });
+      if (attempt < 3) {
+        requestAnimationFrame(() => scrollToBottomWithRetries(attempt + 1));
       }
-      
-      if (event === "SIGNED_OUT" || (!session && wasLoggedIn)) {
-        // 세션이 만료되거나 로그아웃된 경우
-        console.log("⚠️ [Payment] 로그아웃 감지 - 로그인 페이지로 이동");
-        setIsLoggedIn(false);
-        
-        // 로그인 상태였다가 만료된 경우에만 알림 표시 후 로그인 페이지로 이동
-        if (wasLoggedIn) {
-          toast.error("세션이 만료되었습니다. 다시 로그인해주세요.");
-          
-          // 로그인 페이지로 리다이렉트
-          navigate("/");
-        }
-      } else if (event === "SIGNED_IN" || (session && isNowLoggedIn)) {
-        // 로그인되거나 토큰이 갱신된 경우
-        setIsLoggedIn(true);
+    };
+
+    const scrollToSummary = () => {
+      if (totalSummaryRef.current) {
+        totalSummaryRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+        scrollToBottomWithRetries();
+        return true;
       }
-      
-      // 현재 세션 상태 저장
-      prevSessionRef.current = session;
+      return false;
+    };
+
+    if (scrollToSummary()) return;
+
+    const observer = new MutationObserver(() => {
+      if (scrollToSummary()) {
+        observer.disconnect();
+      }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [navigate]);
+    observer.observe(document.body, { childList: true, subtree: true });
 
+    return () => observer.disconnect();
+  }, [step, showPaymentGuide, selectedGifticons.size]);
 
-  // 초기 데이터 로딩 완료 체크
+  // Step1에서 타이머 카운트다운 (튜토리얼에서는 고정)
   useEffect(() => {
-    // 이미 초기 데이터가 로드되었으면 더 이상 체크하지 않음
-    if (hasInitialDataLoaded) {
-      return;
-    }
-
-    // 결제 방식 로딩이 완료되지 않았으면 대기
-    if (isLoadingPaymentMethods) {
-      return;
-    }
-
-    // 매장 정보 로딩이 완료되지 않았으면 대기
-    if (isLoadingStoreInfo) {
-      return;
-    }
-
-    // 브랜드명 로딩이 완료되지 않았으면 대기
-    if (!isStoreNameLoaded) {
-      return;
-    }
-
-    // storeInfo가 null이면 아직 매장 정보를 불러오는 중 (isLoadingStoreInfo가 false인데도 null이면 오류 상황이거나 기본값 설정 전임)
-    if (storeInfo === null) {
-      return;
-    }
-
-    // 기프티콘 로딩 상태 확인
-    // 기프티콘이 사용 가능한 경우, 기프티콘 로딩이 완료될 때까지 대기
-    if (storeInfo.gifticon_available && isLoading) {
-      return;
-    }
-
-    // 모든 로딩이 완료되면 초기 로딩 종료
-    console.log('✅ 모든 데이터 로딩 완료');
-    setHasInitialDataLoaded(true);
-    setIsInitialLoading(false);
-  }, [storeBrand, isLoadingPaymentMethods, isLoadingStoreInfo, isLoading, storeInfo, hasInitialDataLoaded, isStoreNameLoaded]);
-
-
-  // 기프티콘 목록 조회 (브랜드별 필터링 및 천원대별 중복 제거, 할인율 순 정렬)
-  useEffect(() => {
-    const fetchGifticons = async () => {
-      if (!isLoggedIn) {
-        setIsLoading(false);
-        return;
-      }
-
-      if (!storeBrand) {
-        // 브랜드 정보가 없으면 기프티콘 조회하지 않음
-        setGifticons([]);
-        setGifticonsByPriceRange(new Map());
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) {
-          setGifticons([]);
-          setGifticonsByPriceRange(new Map());
-          return;
-        }
-
-        // 먼저 이미 내가 예약한 대기중 기프티콘 조회
-        const { data: existingPending, error: existingError } = await supabase
-          .from('used_gifticons')
-          .select('*')
-          .eq('status', '대기중')
-          .eq('available_at', storeBrand)
-          .eq('reserved_by', session.user.id);
-
-        if (existingError) throw existingError;
-
-        // 이미 대기중인 기프티콘이 있고 천원대별로 하나씩 이상 있으면 그것만 표시
-        if (existingPending && existingPending.length > 0) {
-          // 할인효율 기준으로 한 번 정렬 (DB 레벨에서는 계산식 정렬이 불가능하므로 클라이언트에서 정렬)
-          const sortedPending = [...existingPending].sort(sortByDiscountEfficiency);
-
-          // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
-          const existingGroupedByThousand = new Map<number, UsedGifticon>();
-          sortedPending.forEach((item) => {
-            const priceRange = getPriceRange(item.original_price);
-            // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
-            if (!existingGroupedByThousand.has(priceRange)) {
-              existingGroupedByThousand.set(priceRange, item);
-            }
-          });
-
-          // 그룹화된 항목들을 배열로 변환 (이미 할인효율 순으로 정렬됨)
-          const selectedGifticons: UsedGifticon[] = Array.from(existingGroupedByThousand.values());
-
-          // 불러온 순서 추적 및 초기 기프티콘 ID 저장
-          const initialIds = new Set<string>();
-          const loadOrder = new Map<string, number>();
-          selectedGifticons.forEach((gifticon) => {
-            initialIds.add(gifticon.id);
-            loadOrder.set(gifticon.id, loadOrderCounter.current++);
-          });
-
-          // 정렬: 작은 금액순(판매가 오름차순)
-          selectedGifticons.sort((a, b) => a.sale_price - b.sale_price);
-
-          setGifticons(selectedGifticons);
-          setInitialGifticonIds(initialIds);
-          setGifticonLoadOrder(loadOrder);
-          updateGifticonsByPriceRange(selectedGifticons);
-          setIsLoading(false);
-          return;
-        }
-
-        // 대기중인 기프티콘이 없거나 없는 천원대가 있으면 판매중에서 가져오기
-        const { data: allData, error: fetchError } = await supabase
-          .from('used_gifticons')
-          .select('*')
-          .eq('status', '판매중')
-          .eq('available_at', storeBrand);
-
-        if (fetchError) throw fetchError;
-
-        if (!allData || allData.length === 0) {
-          setGifticons([]);
-          setGifticonsByPriceRange(new Map());
-          setIsLoading(false);
-          return;
-        }
-
-        // 할인효율 기준으로 한 번 정렬 (DB 레벨에서는 계산식 정렬이 불가능하므로 클라이언트에서 정렬)
-        const sortedData = [...allData].sort(sortByDiscountEfficiency);
-
-        // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
-        const groupedByThousand = new Map<number, UsedGifticon>();
-        sortedData.forEach((item) => {
-          const priceRange = getPriceRange(item.original_price);
-          // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
-          if (!groupedByThousand.has(priceRange)) {
-            groupedByThousand.set(priceRange, item);
-          }
-        });
-
-        // 그룹화된 항목들을 배열로 변환 (이미 할인효율 순으로 정렬됨)
-        const displayGifticons: UsedGifticon[] = Array.from(groupedByThousand.values());
-        for (const gifticon of displayGifticons) {
-          // 각 천원대의 첫 번째 기프티콘만 대기중으로 변경
-          const { error: reserveError } = await supabase
-            .from('used_gifticons')
-            .update({
-              status: '대기중',
-              reserved_by: session.user.id,
-              reserved_at: new Date().toISOString()
-            })
-            .eq('id', gifticon.id)
-            .eq('status', '판매중'); // 판매중인 것만 대기중으로 변경
-
-          if (reserveError) {
-            console.error("기프티콘 예약 오류:", reserveError);
-          }
-        }
-
-        // 대기중으로 변경된 기프티콘 조회 (내가 예약한 것만)
-        const { data, error } = await supabase
-          .from('used_gifticons')
-          .select('*')
-          .eq('status', '대기중')
-          .eq('available_at', storeBrand)
-          .eq('reserved_by', session.user.id);
-
-        if (error) throw error;
-
-        if (data) {
-          // 할인효율 기준으로 한 번 정렬 (DB 레벨에서는 계산식 정렬이 불가능하므로 클라이언트에서 정렬)
-          const sortedData = [...data].sort(sortByDiscountEfficiency);
-
-          // 천원대별로 그룹화하면서 할인효율이 높은 순으로 이미 정렬된 데이터를 사용
-          const finalGroupedByThousand = new Map<number, UsedGifticon>();
-          sortedData.forEach((item) => {
-            const priceRange = getPriceRange(item.original_price);
-            // 같은 천원대에 아직 항목이 없으면 추가 (이미 할인효율 순으로 정렬되어 있으므로 첫 번째가 최고 효율)
-            if (!finalGroupedByThousand.has(priceRange)) {
-              finalGroupedByThousand.set(priceRange, item);
-            }
-          });
-
-          // 그룹화된 항목들을 배열로 변환 (이미 할인효율 순으로 정렬됨)
-          const finalGifticons: UsedGifticon[] = Array.from(finalGroupedByThousand.values());
-
-          // 불러온 순서 추적 및 초기 기프티콘 ID 저장
-          const initialIds = new Set<string>();
-          const loadOrder = new Map<string, number>();
-          finalGifticons.forEach((gifticon) => {
-            initialIds.add(gifticon.id);
-            loadOrder.set(gifticon.id, loadOrderCounter.current++);
-          });
-
-          // 정렬: 작은 금액순(판매가 오름차순)
-          finalGifticons.sort((a, b) => a.sale_price - b.sale_price);
-
-          setGifticons(finalGifticons);
-          setInitialGifticonIds(initialIds);
-          setGifticonLoadOrder(loadOrder);
-          updateGifticonsByPriceRange(finalGifticons);
-        } else {
-          setGifticons([]);
-          setGifticonsByPriceRange(new Map());
-        }
-      } catch (error: any) {
-        console.error("기프티콘 조회 오류:", error);
-        toast.error("기프티콘을 불러오는 중 오류가 발생했습니다.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchGifticons();
-  }, [isLoggedIn, storeBrand]);
-
-  // 페이지 언마운트 시 모든 대기중 기프티콘을 판매중으로 복구
-  useEffect(() => {
-    return () => {
-      if (!isLoggedIn) return;
-
-      const releaseAllReservedGifticons = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user || !storeBrand) return;
-
-        // 해당 사용자가 예약한 해당 브랜드의 대기중 기프티콘을 판매중으로 복구
-        await supabase
-          .from('used_gifticons')
-          .update({ 
-            status: '판매중',
-            reserved_by: null,
-            reserved_at: null
-          })
-          .eq('available_at', storeBrand)
-          .eq('status', '대기중')
-          .eq('reserved_by', session.user.id);
-      };
-
-      releaseAllReservedGifticons();
-    };
-  }, [isLoggedIn, storeBrand]);
-
-  // Step1에서 타이머 카운트다운
-  useEffect(() => {
-    if (step !== 1 || !isLoggedIn || !storeBrand) {
-      setRemainingTime(60); // step이 변경되면 타이머 리셋
-      return;
-    }
-
-    setRemainingTime(60); // step 1 진입시 타이머 초기화
-
-    const intervalId = setInterval(() => {
-      setRemainingTime(prev => {
-        if (prev <= 1) {
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [step, isLoggedIn, storeBrand]);
-
-  // Step1에서 1분 이상 머무르면 main으로 이동하고 대기중 기프티콘 복구
-  useEffect(() => {
-    if (step !== 1 || !isLoggedIn || !storeBrand) return;
-
-    const timeoutId = setTimeout(async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
-
-      // 대기중 기프티콘을 판매중으로 복구
-      await supabase
-        .from('used_gifticons')
-        .update({ 
-          status: '판매중',
-          reserved_by: null,
-          reserved_at: null
-        })
-        .eq('available_at', storeBrand)
-        .eq('status', '대기중')
-        .eq('reserved_by', session.user.id);
-
-      // main으로 이동
-      navigate('/main');
-    }, 60000); // 1분 = 60초
-
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [step, isLoggedIn, storeBrand, navigate]);
+    setRemainingTime(60);
+  }, [step]);
 
 
   // 모든 하위 기프티콘 ID를 재귀적으로 수집하는 헬퍼 함수
@@ -2210,6 +1550,11 @@ const Payment = () => {
       }
     }
 
+    // 튜토리얼 모드: 기프티콘 클릭 후 확인 버튼 포인터를 새로 생성
+    if (isTutorial && step === 1) {
+      setShowConfirmPointer(false);
+      requestAnimationFrame(() => setShowConfirmPointer(true));
+    }
   };
 
 
@@ -2266,222 +1611,48 @@ const Payment = () => {
     }, 0) + couponDiscount;
 
   const handlePayment = async () => {
-    // 선택한 기프티콘이 없으면 바로 Step 2로 이동
-    if (selectedGifticons.size === 0) {
-      setStep(2);
-      return;
-    }
-
-
-    if (!isLoggedIn) {
-      toast.error("로그인이 필요합니다.");
-      return;
-    }
-
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
-      toast.error("로그인이 필요합니다.");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      // 모든 선택한 기프티콘을 판매완료로 변경
-      const allReservedIds: string[] = [];
-      const purchasedGifticonsData: Array<{ gifticon: UsedGifticon; reservedId: string }> = [];
-      
-      // 자동선택 모드에서는 autoSelectedGifticons에서 찾기
-      const sourceList = isAutoSelectMode ? autoSelectedGifticons : gifticons;
-      for (const selected of selectedGifticons.values()) {
-        allReservedIds.push(selected.reservedId);
-        const gifticon = sourceList.find(g => g.id === selected.id);
-        if (gifticon) {
-          purchasedGifticonsData.push({ gifticon, reservedId: selected.reservedId });
-        }
-      }
-
-      // 이미 결제 완료된 기프티콘 제외하고 새로 결제할 항목만 필터링
-      const newReservedIds = allReservedIds.filter(id => !completedPurchases.has(id));
-
-      // 새로 결제할 항목이 없으면 Step 2로 이동만
-      if (newReservedIds.length === 0) {
-        setIsLoading(false);
-        setStep(2);
-        return;
-      }
-
-      // used_gifticons에서 상세 정보 조회 (새로 결제할 항목만)
-      const { data: usedGifticonsData, error: fetchError } = await supabase
-        .from('used_gifticons')
-        .select('*')
-        .in('id', newReservedIds);
-
-      if (fetchError) throw fetchError;
-
-      // 타입 안전성을 위한 타입 단언 (name 필드가 추가됨)
-      type UsedGifticonWithName = UsedGifticon & { name?: string };
-      const typedGifticonsData = usedGifticonsData as UsedGifticonWithName[];
-
-      // 판매완료로 상태 변경 (새로 결제할 항목만)
-      console.log("판매완료 변경 시도:", newReservedIds);
-      const { error: updateError } = await supabase
-        .from('used_gifticons')
-        .update({ status: '판매완료' })
-        .in('id', newReservedIds);
-
-      if (updateError) {
-        console.error("판매완료 변경 오류:", updateError);
-        throw updateError;
-      }
-      console.log("판매완료 변경 성공");
-
-      // gifticons 테이블의 상태도 판매완료로 업데이트 (id로 조인)
-      const { error: updateGifticonsError } = await supabase
-        .from('gifticons')
-        .update({ 
-          status: '판매완료',
-          is_selling: false 
-        })
-        .in('id', newReservedIds);
-
-      if (updateGifticonsError) {
-        console.error("gifticons 판매완료 변경 오류:", updateGifticonsError);
-        // 에러가 발생해도 계속 진행 (used_gifticons는 이미 업데이트됨)
-      } else {
-        console.log("gifticons 판매완료 변경 성공");
-      }
-
-      // gifticons 테이블에 구매한 기프티콘 추가
-      if (typedGifticonsData && typedGifticonsData.length > 0) {
-        const gifticonsToInsert = typedGifticonsData.map((item) => ({
-          user_id: session.user.id,
-          brand: item.available_at, // available_at을 brand로 사용
-          name: item.name || `${item.available_at} 기프티콘`, // used_gifticons의 name 사용 (없으면 fallback)
-          image: '🎫', // 기본 이미지
-          original_price: item.original_price,
-          expiry_date: item.expiry_date,
-          status: '사용가능', // 초기 상태는 사용가능 (step 2 진입 시 사용완료로 변경)
-          is_selling: false,
-          barcode: item.barcode, // 바코드도 함께 저장
-        }));
-
-        const { error: insertError } = await supabase
-          .from('gifticons')
-          .insert(gifticonsToInsert);
-
-        if (insertError) throw insertError;
-
-        // 방금 구매한 기프티콘 개수 저장 (step 2에서 사용완료 처리 시 사용)
-        setRecentlyPurchasedCount(typedGifticonsData.length);
-      }
-
-      toast.success("결제가 완료되었습니다!");
-      
-      // 결제 완료된 기프티콘 ID 저장 (기존 + 새로 결제한 항목)
-      setCompletedPurchases(prev => new Set([...prev, ...newReservedIds]));
-      
-      // 선택 상태는 유지 (뒤로가기 방지용)
-      setStep(2);
-    } catch (error: any) {
-      console.error("결제 오류:", error);
-      toast.error(error.message || "결제 중 오류가 발생했습니다.");
-    } finally {
-      setIsLoading(false);
-    }
+    // 튜토리얼용 가짜 결제 처리
+    setStep(3);
+    setTutorialStep("payment_barcode");
+    toast.info("튜토리얼 모드: 가짜 결제가 완료되었습니다!");
   };
 
   // 결제 완료 처리 (상태 초기화 및 메인으로 이동)
   const handlePaymentComplete = () => {
-    toast.success('결제가 완료되었습니다!');
-    
-    // sessionStorage 정리
-    sessionStorage.removeItem('toss_payment_order');
-    sessionStorage.removeItem('toss_payment_return_url');
-    sessionStorage.removeItem('payment_success');
-    sessionStorage.removeItem('payment_result');
+    setIsTutorialCompleteModalOpen(true);
+  };
+
+  const handleFinalConfirm = () => {
+    // 튜토리얼 완료 처리
+    completeTutorial();
     
     // 상태 초기화
     setSelectedGifticons(new Map());
     setCompletedPurchases(new Set());
     
-    // 메인으로 이동
+    // 실제 메인으로 이동
     navigate('/main');
   };
 
   const handleConfirmStep1 = async () => {
-    // MVP 시연용: Step 1 → Step 3 (가짜 결제 완료 페이지로 바로 이동, 검증 없음)
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        toast.error("로그인이 필요합니다.");
-        navigate('/');
-        return;
-      }
-
-      // MVP 시연용: 선택된 모든 기프티콘을 판매중으로 전환
-      const selectedIds: string[] = [];
-      for (const selected of selectedGifticons.values()) {
-        selectedIds.push(selected.reservedId || selected.id);
-      }
-
-      if (selectedIds.length > 0) {
-        const { error: updateError } = await supabase
-          .from('used_gifticons')
-          .update({ status: '판매중' })
-          .in('id', selectedIds);
-
-        if (updateError) {
-          console.error("판매중 변경 오류:", updateError);
-          // 에러가 발생해도 계속 진행 (MVP 시연용)
-        }
-      }
-
-      // customerKey 생성 (사용자 ID 기반)
-      const customerKey = `customer_${session.user.id.replace(/-/g, '').substring(0, 20)}`;
-      
-      // orderId 생성
-      const orderId = generateOrderId();
-      
-      // 주문 정보를 sessionStorage에 저장
-      const orderData = {
-        orderId,
-        amount: totalCost || 0,
-        orderName: `${actualStoreName || '매장'} 기프티콘 ${selectedGifticons.size || 0}개`,
-        storeId,
-        storeName: actualStoreName,
-        storeBrand,
-        customerKey,
-        gifticons: Array.from(selectedGifticons.values()),
-        selectedGifticonIds: Array.from(selectedGifticons.keys()),
-        timestamp: new Date().toISOString(),
-      };
-      
-      sessionStorage.setItem('toss_payment_order', JSON.stringify(orderData));
-      
-      // MVP 시연용: Step 3로 바로 이동 (가짜 결제 완료 페이지)
-      navigate(`/payment/${storeId}?step=3`, { replace: false });
-
-    } catch (error: any) {
-      console.error("오류:", error);
-      // 에러가 발생해도 Step 3로 이동 (MVP 시연용)
-      navigate(`/payment/${storeId}?step=3`, { replace: false });
-    }
+    // 가짜 결제 - 바로 step 3로 이동
+    setShowGifticonGuide(false);
+    setStep(3);
+    setShowBarcodeGuide(true);
+    setTutorialStep("payment_barcode");
+    toast.info("튜토리얼 모드: 가짜 결제가 완료되었습니다!");
   };
 
-  // Step 2에서 결제하기 버튼 클릭 시 네이버페이 앱 실행
+  // Step 2에서 결제하기 버튼 클릭 시 네이버페이 앱 실행 (튜토리얼에서는 비활성화)
   const handlePayWithNaverPay = () => {
-    // 안드로이드 전용 - 네이버페이 앱 패키지명
-    if (window.location) {
-      window.location.href = "intent://launch#Intent;package=com.samsung.android.spay;end;";
-    }
+    // 튜토리얼 모드에서는 아무 동작도 하지 않음 (토스트 메시지 제거)
   };
 
   // Step 3에서 뒤로가기 클릭 시 처리
   const handleBackFromStep3 = () => {
     // 결제 완료 후에는 뒤로가기 불가 (메인으로 이동)
     toast.info('결제가 완료되었습니다. 메인 페이지로 이동합니다.');
-    navigate('/main');
+    navigate('/tutorial');
   };
 
   // 2단계에서 보여줄 총 카드 수 (기프티콘 + 멤버십)
@@ -2697,8 +1868,10 @@ const Payment = () => {
   return (
     <div className={`bg-background ${step === 3 ? 'h-screen overflow-hidden' : 'min-h-screen pb-6'}`}>
       {/* 튜토리얼 배너 (튜토리얼 모드에서만 표시) */}
-      {/* 첫구매 무료 적용중 배너 (결제 이력이 없을 때만 표시) */}
-      {!hasPaymentHistory && <FirstPurchaseBanner />}
+      {isTutorial && <TutorialBanner />}
+      
+      {/* 첫구매 무료 적용중 배너 (일반 모드에서 결제 이력이 없을 때만 표시) */}
+      {!isTutorial && !hasPaymentHistory && <FirstPurchaseBanner />}
       
       {(step === 1 || step === 2) && (
         <header className="sticky top-0 z-50 bg-card border-b border-border">
@@ -2712,7 +1885,7 @@ const Payment = () => {
                   sessionStorage.removeItem('toss_payment_order');
                   
                   // Step 1로 이동 (cleanup은 useEffect에서 자동 처리)
-                  navigate(`/payment/${storeId}`, { replace: false });
+                  navigate(isTutorial ? `/tutorial/payment/${storeId}` : `/payment/${storeId}`, { replace: false });
                 }} 
                 className="absolute left-4 top-1/2 -translate-y-1/2 z-10"
               >
@@ -2721,7 +1894,7 @@ const Payment = () => {
                 </Button>
               </button>
             ) : (
-              <Link to="/main" className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
+              <Link to={isTutorial ? "/tutorial" : "/main"} className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <ArrowLeft className="w-5 h-5" />
                 </Button>
@@ -2745,7 +1918,7 @@ const Payment = () => {
         {step === 1 ? (
           <>
             {/* Payment Method Selection */}
-            <div className="space-y-3">
+            <div className={`space-y-3 ${isTutorial ? 'pointer-events-none opacity-50' : ''}`}>
               <h2 className="text-lg font-bold mb-4">결제방식 추천</h2>
               {paymentMethods.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
@@ -2758,6 +1931,8 @@ const Payment = () => {
                 const isGifticon = method.type === 'gifticon';
                 const isMembership = method.type === 'membership';
                 const isCombined = method.type === 'combined';
+                const membershipType = (method as any).method_type;
+                const membershipRate = (method as any).rate;
                 const isRecommended = method.id === recommendedMethodId;
                 
                 // 할인율/적립률 표시 계산 (description 우선 사용)
@@ -2765,13 +1940,13 @@ const Payment = () => {
                 if (!displayDiscount) {
                   if (isGifticon) {
                     displayDiscount = method.gifticonDiscount ? `${method.gifticonDiscount}% 할인` : gifticonMethodDiscount;
-                  } else if (isMembership && method.method_type) {
-                    if (method.method_type === '적립' && method.rate) {
-                      displayDiscount = `${method.rate}% 적립`;
-                    } else if (method.method_type === '스탬프') {
+                  } else if (isMembership && membershipType) {
+                    if (membershipType === '적립' && membershipRate) {
+                      displayDiscount = `${membershipRate}% 적립`;
+                    } else if (membershipType === '스탬프') {
                       displayDiscount = "스탬프 적립";
-                    } else if (method.method_type === '결제' && method.rate) {
-                      displayDiscount = `${method.rate}% 할인`;
+                    } else if (membershipType === '결제' && membershipRate) {
+                      displayDiscount = `${membershipRate}% 할인`;
                     } else {
                       displayDiscount = "적용";
                     }
@@ -2794,7 +1969,6 @@ const Payment = () => {
                     }`}
                     onClick={() => {
                       if (isEnabled) {
-                        setHasUserSelectedPaymentMethodManually(true);
                         const newSet = new Set(selectedPaymentOptions);
                         if (isSelected) {
                           newSet.delete(method.id);
@@ -2821,7 +1995,6 @@ const Payment = () => {
                             checked={isSelected}
                             onCheckedChange={(checked) => {
                               if (!isEnabled) return;
-                              setHasUserSelectedPaymentMethodManually(true);
                               const newSet = new Set(selectedPaymentOptions);
                               if (checked) {
                                 newSet.add(method.id);
@@ -2863,7 +2036,7 @@ const Payment = () => {
             {canUseGifticon && (
               <>
                 {/* 가격 입력창 */}
-                <div className="space-y-2 mb-4">
+                <div className={`space-y-2 mb-4 ${isTutorial ? 'pointer-events-none opacity-50' : ''}`}>
                   <label className="text-sm font-medium">결제할 금액 입력 (선택사항)</label>
                   <div className="flex gap-2 items-center">
                     <div className="flex-1 relative">
@@ -2932,7 +2105,7 @@ const Payment = () => {
                 </div>
 
                 <Card className="p-5 rounded-2xl border-border/50">
-                  <div className="flex items-center justify-between mb-4">
+                  <div className={`flex items-center justify-between mb-4 ${isTutorial ? 'pointer-events-none opacity-50' : ''}`}>
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                         <Gift className="w-5 h-5 text-primary" />
@@ -2955,14 +2128,15 @@ const Payment = () => {
                           const discountAmount = gifticon.original_price - gifticon.sale_price;
                           const discountPercent = Math.round((discountAmount / gifticon.original_price) * 100);
                           
-                          const isDisabled = isLoading || (isAutoSelectMode && !isSelected);
+                          const isDisabled = isLoading || (isAutoSelectMode && !isSelected) || (isTutorial && index > 0);
 
                           return (
                             <div
                               key={gifticon.id}
+                              ref={isTutorial && index === 0 ? gifticonGuideRef : null}
                               className={`p-4 rounded-xl transition-all ${
                                 isDisabled && !isSelected
-                                  ? "bg-muted/30 border border-transparent opacity-60 cursor-not-allowed"
+                                  ? "bg-muted/30 border border-transparent opacity-60 cursor-not-allowed pointer-events-none"
                                   : isSelected
                                   ? "bg-primary/10 border-2 border-primary cursor-pointer"
                                   : "bg-muted/50 border border-transparent hover:border-border cursor-pointer"
@@ -3004,7 +2178,7 @@ const Payment = () => {
                     )}
 
                 {selectedGifticons.size > 0 && (
-                  <div className="mt-4 pt-4 border-t border-border space-y-4">
+                  <div className={`mt-4 pt-4 border-t border-border space-y-4 ${isTutorial ? 'pointer-events-none opacity-50' : ''}`}>
                     {/* 할인쿠폰 선택 섹션 */}
                     {availableCoupons.length > 0 && (
                       <Collapsible open={isCouponExpanded} onOpenChange={setIsCouponExpanded}>
@@ -3162,6 +2336,7 @@ const Payment = () => {
 
             {/* Confirm Button */}
             <Button
+              ref={isTutorial && step === 1 ? paymentButtonRef : null}
               onClick={handleConfirmStep1}
               className="w-full h-14 text-lg font-semibold rounded-xl"
               disabled={isLoading}
@@ -3169,6 +2344,48 @@ const Payment = () => {
               확인
             </Button>
             
+            {/* Step 1 튜토리얼 가이드 */}
+            {showGifticonGuide && isTutorial && step === 1 && gifticonGuideRef.current && (
+              <TutorialGuide
+                targetElement={gifticonGuideRef.current}
+                message="기프티콘을 선택해주세요!"
+                position="bottom"
+                onNext={() => {
+                  setShowGifticonGuide(false);
+                  setTutorialStep(null);
+                }}
+                onSkip={() => {
+                  setShowGifticonGuide(false);
+                  setTutorialStep(null);
+                }}
+              />
+            )}
+
+        {showPaymentGuide && isTutorial && step === 1 && paymentButtonRef.current && (
+          <TutorialGuide
+            targetElement={paymentButtonRef.current}
+            message="확인 버튼을 눌러 결제를 진행하세요!"
+            position="top"
+            onNext={() => {
+              setShowPaymentGuide(false);
+              setTutorialStep(null);
+            }}
+            onSkip={() => {
+              setShowPaymentGuide(false);
+              setTutorialStep(null);
+            }}
+          />
+        )}
+
+        {/* 튜토리얼용 터치 유도 원형 포인터 (기프티콘 선택 유도) */}
+        {showGifticonGuide && isTutorial && step === 1 && gifticonGuideRef.current && (
+          <TutorialPointer targetElement={gifticonGuideRef.current} />
+        )}
+
+        {/* 튜토리얼용 터치 유도 원형 포인터 (확인 버튼 유도) */}
+        {showPaymentGuide && showConfirmPointer && isTutorial && step === 1 && paymentButtonRef.current && (
+          <TutorialPointer targetElement={paymentButtonRef.current} />
+        )}
           </>
         ) : step === 2 ? (
           <>
@@ -3226,7 +2443,17 @@ const Payment = () => {
               {/* 결제하기 버튼 */}
               <Button
                 id="payment-button"
+                ref={isTutorial && step === 2 ? paymentButtonRef : null}
                 onClick={async () => {
+                  // 튜토리얼 모드일 때 가짜 결제 플로우
+                  if (isTutorial) {
+                    setShowPaymentGuide(false);
+                    setStep(3);
+                    setTutorialStep("payment_barcode");
+                    toast.info("튜토리얼 모드: 가짜 결제가 완료되었습니다!");
+                    return;
+                  }
+                  
                   if (!paymentWidgets) {
                     toast.error('결제 준비 중입니다. 잠시 후 다시 시도해주세요.');
                     return;
@@ -3271,6 +2498,23 @@ const Payment = () => {
               >
                 {isLoading ? '처리 중...' : paymentWidgets ? '결제하기' : '준비 중...'}
               </Button>
+              
+              {/* Step 2 튜토리얼 가이드 */}
+              {showPaymentGuide && isTutorial && step === 2 && paymentButtonRef.current && (
+                <TutorialGuide
+                  targetElement={paymentButtonRef.current}
+                  message="결제하기 버튼을 눌러주세요!"
+                  position="top"
+                  onNext={() => {
+                    setShowPaymentGuide(false);
+                    setTutorialStep(null);
+                  }}
+                  onSkip={() => {
+                    setShowPaymentGuide(false);
+                    setTutorialStep(null);
+                  }}
+                />
+              )}
             </div>
           </>
         ) : (
@@ -3302,7 +2546,7 @@ const Payment = () => {
 
             <div className="flex flex-col h-full py-4 overflow-hidden">
               <div 
-                className="flex-1 overflow-y-auto snap-y snap-mandatory scrollbar-hide pb-32"
+                className="flex-1 overflow-hidden snap-y snap-mandatory scrollbar-hide pb-32"
                 style={{
                   scrollSnapType: 'y mandatory',
                   scrollbarWidth: 'none',
@@ -3346,6 +2590,7 @@ const Payment = () => {
                         scrollSnapAlign: 'start',
                         scrollSnapStop: 'always',
                       }}
+                      ref={isTutorial && index === 0 ? barcodeRef : null}
                     >
                       <Card className="p-4 rounded-2xl border-border/50">
                         <div className="space-y-3">
@@ -3496,7 +2741,7 @@ const Payment = () => {
                   ref={payAppButtonRef}
                   onClick={handlePayWithNaverPay}
                   className="w-full h-14 text-lg font-semibold rounded-xl opacity-50"
-                  disabled={true}
+                  disabled={false} // 튜토리얼 중에는 클릭이 가능하도록 활성화
                 >
                   {isLoading ? "처리 중..." : "결제앱 실행"}
                 </Button>
@@ -3511,9 +2756,119 @@ const Payment = () => {
             </div>
           </>
         )}
+        
+        {/* Step 3 튜토리얼 가이드 */}
+        {showBarcodeGuide && isTutorial && step === 3 && barcodeRef.current && (
+          <TutorialGuide
+            targetElement={barcodeRef.current}
+            message={`바코드를 확인하세요!
+화면 어디든 터치하여 다음단계로 이동`}
+            position="top"
+            allowAnywhereClick={true}
+            onNext={() => {
+              setShowBarcodeGuide(false);
+              setShowMembershipGuide(true);
+            }}
+          />
+        )}
+
+        {showMembershipGuide && isTutorial && step === 3 && membershipAppRef.current && (
+          <TutorialGuide
+            targetElement={membershipAppRef.current}
+            message="멤버십 앱을 실행하여 포인트를 적립하실 수 있습니다!"
+            position="bottom"
+            allowAnywhereClick={false}
+            onNext={() => {
+              setShowMembershipGuide(false);
+              setShowMembershipBarcodeGuide(true);
+            }}
+          />
+        )}
+
+        {showMembershipBarcodeGuide && isTutorial && step === 3 && membershipBarcodeRef.current && (
+          <TutorialGuide
+            targetElement={membershipBarcodeRef.current}
+            message={`멤버십 바코드를 캡처하여 등록하시면
+앱 내에서 바코드를 바로 사용하실 수 있습니다`}
+            position="top"
+            allowAnywhereClick={false}
+            onNext={() => {
+              setShowMembershipBarcodeGuide(false);
+              setShowPayAppGuide(true);
+            }}
+          />
+        )}
+
+        {showPayAppGuide && isTutorial && step === 3 && payAppButtonRef.current && (
+          <TutorialGuide
+            targetElement={payAppButtonRef.current}
+            message={`결제앱을 실행하실 수 있습니다
+(삼성페이, 카카오페이 등)`}
+            position="top"
+            allowAnywhereClick={false}
+            onNext={() => {
+              setShowPayAppGuide(false);
+              setShowPaymentCompleteGuide(true);
+            }}
+          />
+        )}
+
+        {showPaymentCompleteGuide && isTutorial && step === 3 && paymentCompleteButtonRef.current && (
+          <TutorialGuide
+            targetElement={paymentCompleteButtonRef.current}
+            message="결제 완료 버튼을 눌러 튜토리얼을 마무리하세요!"
+            position="top"
+            allowAnywhereClick={false}
+            onNext={() => {
+              setShowPaymentCompleteGuide(false);
+              handlePaymentComplete();
+            }}
+          />
+        )}
+
+        {/* 튜토리얼용 터치 유도 원형 포인터 (멤버십 앱 유도) */}
+        {showMembershipGuide && isTutorial && step === 3 && membershipAppRef.current && (
+          <TutorialPointer targetElement={membershipAppRef.current} />
+        )}
+
+        {showMembershipBarcodeGuide && isTutorial && step === 3 && membershipBarcodeRef.current && (
+          <TutorialPointer targetElement={membershipBarcodeRef.current} />
+        )}
+
+        {showPayAppGuide && isTutorial && step === 3 && payAppButtonRef.current && (
+          <TutorialPointer targetElement={payAppButtonRef.current} />
+        )}
+
+        {/* 튜토리얼용 터치 유도 원형 포인터 (결제 완료 유도) */}
+        {showPaymentCompleteGuide && isTutorial && step === 3 && paymentCompleteButtonRef.current && (
+          <TutorialPointer targetElement={paymentCompleteButtonRef.current} />
+        )}
+
+        {/* 튜토리얼 완료 모달 */}
+        <Dialog open={isTutorialCompleteModalOpen} onOpenChange={setIsTutorialCompleteModalOpen}>
+          <DialogContent 
+            className="sm:max-w-md rounded-2xl [&>button]:hidden"
+            onPointerDownOutside={(e) => e.preventDefault()}
+            onEscapeKeyDown={(e) => e.preventDefault()}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-center">
+                튜토리얼 완료
+              </DialogTitle>
+              <DialogDescription className="text-center pt-2">
+                stan 튜토리얼이 완료되었습니다.<br />실제 매장에서 사용해보세요!
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="sm:justify-center mt-4">
+              <Button onClick={handleFinalConfirm} className="w-full h-12 text-base font-semibold">
+                확인
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
 };
 
-export default Payment;
+export default TutorialPayment;

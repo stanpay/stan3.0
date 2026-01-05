@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { MapPin } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
 
 interface StoreCardProps {
   id: string;
@@ -16,6 +17,9 @@ interface StoreCardProps {
   parking_available?: boolean; // 주차가능 여부
   free_parking?: boolean; // 무료주차 여부
   parking_size?: string | null; // 주차장 규모 ('넓음', '보통', '좁음')
+  tutorialMode?: boolean; // 튜토리얼 모드 여부
+  isHighlighted?: boolean; // 강조 표시 여부
+  disabled?: boolean; // 비활성화 여부
 }
 
 const brandLogos: Record<string, string> = {
@@ -40,8 +44,13 @@ const StoreCard = ({
   parking_available = false,
   free_parking = false,
   parking_size = null,
+  tutorialMode = false,
+  isHighlighted = false,
+  disabled = false,
 }: StoreCardProps) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isTutorial = location.pathname.includes("/tutorial");
   const logoSrc = brandLogos[image] || brandLogos.starbucks;
   
   // 매장명 길이에 따라 폰트 크기 자동 조절
@@ -53,8 +62,12 @@ const StoreCard = ({
   };
 
   const handleClick = () => {
-    // 로그인 여부와 관계없이 결제 페이지로 이동 (더미 데이터 표시)
-    navigate(`/payment/${id}`);
+    // 튜토리얼 모드에서 비활성화된 매장은 클릭 불가
+    if (disabled) return;
+    
+    // 튜토리얼 모드면 튜토리얼 결제 페이지로, 아니면 일반 결제 페이지로
+    const paymentPath = isTutorial ? `/tutorial/payment/${id}` : `/payment/${id}`;
+    navigate(paymentPath);
   };
 
   // 지역화폐 칩 표시 여부
@@ -73,8 +86,33 @@ const StoreCard = ({
   };
   
   return (
-    <div onClick={handleClick}>
-      <Card className="overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-card border-border/50">
+    <div 
+      onClick={handleClick}
+      className={cn(
+        "relative",
+        disabled && "opacity-50 cursor-not-allowed",
+        isHighlighted && "animate-pulse"
+      )}
+    >
+      <Card 
+        className={cn(
+          "relative overflow-hidden transition-all duration-300 bg-card border-border/50",
+          !disabled && "cursor-pointer hover:shadow-lg hover:-translate-y-1",
+          isHighlighted && "border-4 border-primary shadow-[0_0_20px_rgba(var(--primary),0.5)]"
+        )}
+      >
+        {isHighlighted && (
+          <>
+            <div
+              className="absolute inset-0 bg-primary/20 animate-pulse pointer-events-none rounded-lg"
+              aria-hidden="true"
+            />
+            {/* 터치 유도 회색 동그라미 - 카드의 펄스(밝기 변화)와 별도로 동작하도록 타이밍 조절 */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 translate-x-12">
+              <div className="w-8 h-8 bg-gray-600/60 rounded-full animate-[pulse_1.5s_infinite_500ms] backdrop-blur-sm border-2 border-white/40 shadow-inner" />
+            </div>
+          </>
+        )}
         <div className="flex flex-col">
           <div className="flex-1 bg-primary/10 flex items-center justify-center p-4 relative">
             <img 

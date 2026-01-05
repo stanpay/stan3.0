@@ -135,6 +135,66 @@ export type Database = {
         }
         Relationships: []
       }
+      gifticon_average_prices: {
+        Row: {
+          average_price: number
+          brand: string
+          created_at: string | null
+          id: string
+          last_updated_at: string | null
+          product_name: string
+          sample_count: number
+        }
+        Insert: {
+          average_price: number
+          brand: string
+          created_at?: string | null
+          id?: string
+          last_updated_at?: string | null
+          product_name: string
+          sample_count?: number
+        }
+        Update: {
+          average_price?: number
+          brand?: string
+          created_at?: string | null
+          id?: string
+          last_updated_at?: string | null
+          product_name?: string
+          sample_count?: number
+        }
+        Relationships: []
+      }
+      gifticon_recognition_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          recognition_result: Json | null
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          recognition_result?: Json | null
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          recognition_result?: Json | null
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       gifticons: {
         Row: {
           barcode: string | null
