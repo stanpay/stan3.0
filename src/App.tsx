@@ -28,6 +28,7 @@ import ChatSupport from "./components/ChatSupport";
 import AdminLogin from "./pages/Admin/AdminLogin";
 import AdminDashboard from "./pages/Admin/AdminDashboard";
 import MembershipManagement from "./pages/MembershipManagement";
+import LandingPage from "./pages/Landing/LandingPage";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
       >
         <Routes>
           <Route path="/" element={<Login />} />
+          <Route path="/landing" element={<LandingPage />} />
           <Route path="/main" element={<ProtectedRoute><Main /></ProtectedRoute>} />
           <Route path="/tutorial" element={<ProtectedRoute><TutorialMain /></ProtectedRoute>} />
           <Route path="/location" element={<ProtectedRoute><Location /></ProtectedRoute>} />
