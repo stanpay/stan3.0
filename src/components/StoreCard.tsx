@@ -10,8 +10,6 @@ interface StoreCardProps {
   image: string;
   maxDiscount: string | null; // 할인율이 없으면 null
   address?: string;
-  isLoggedIn?: boolean;
-  onLoginRequired?: () => void;
   local_currency_available?: boolean; // 지역화폐 사용가능 여부
   local_currency_discount_rate?: number | null; // 지역화폐 할인율
   parking_available?: boolean; // 주차가능 여부
@@ -37,8 +35,6 @@ const StoreCard = ({
   image, 
   maxDiscount, 
   address, 
-  isLoggedIn = true, 
-  onLoginRequired,
   local_currency_available = false,
   local_currency_discount_rate = null,
   parking_available = false,

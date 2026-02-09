@@ -169,29 +169,26 @@ const Main = () => {
       // 초기 세션 상태를 ref에 저장 (onAuthStateChange에서 사용)
       prevSessionRef.current = session;
       
-      if (!loggedIn) {
-        // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
-        console.log("🔐 [인증 필요] 로그인 페이지로 리다이렉트");
-        navigate("/");
-        return;
-      }
+      // 튜토리얼 모달 표시 여부 확인 (로그인된 경우에만, 결제 이력 없고 완료 안 한 경우)
+      if (session) {
+        try {
+          const { data: paymentHistory, error: paymentError } = await supabase
+            .from('payment_history')
+            .select('id')
+            .eq('user_id', session.user.id)
+            .limit(1);
 
-      // 튜토리얼 모달 표시 여부 확인 (결제 이력 없고 완료 안 한 경우)
-      try {
-        const { data: paymentHistory, error: paymentError } = await supabase
-          .from('payment_history')
-          .select('id')
-          .eq('user_id', session.user.id)
-          .limit(1);
-
-        const paymentHistoryExists = !paymentError && paymentHistory && paymentHistory.length > 0;
-        setHasPaymentHistory(paymentHistoryExists);
-        const needTutorial = await shouldShowTutorial(paymentHistoryExists);
-        if (needTutorial) {
-          setShowTutorialModal(true);
+          const paymentHistoryExists = !paymentError && paymentHistory && paymentHistory.length > 0;
+          setHasPaymentHistory(paymentHistoryExists);
+          const needTutorial = await shouldShowTutorial(paymentHistoryExists);
+          if (needTutorial) {
+            setShowTutorialModal(true);
+          }
+        } catch (error) {
+          console.error("튜토리얼 모달 표시 판단 실패:", error);
         }
-      } catch (error) {
-        console.error("튜토리얼 모달 표시 판단 실패:", error);
+      } else {
+        setHasPaymentHistory(false);
       }
 
       // 최근 위치 조회 시간 확인 (5분 이내면 재조회 하지 않음)
@@ -549,42 +546,15 @@ const Main = () => {
       const wasLoggedIn = !!prevSessionRef.current;
       const isNowLoggedIn = !!session;
       
-      // INITIAL_SESSION 이벤트 처리: 세션이 없고 이전에 로그인 상태였다면 로그아웃으로 간주
       if (event === "INITIAL_SESSION" && !session && wasLoggedIn) {
-        console.log("⚠️ [세션 만료] INITIAL_SESSION 세션 없음 - 로그인 상태였으나 세션이 없음");
         setIsLoggedIn(false);
-        
-        toast({
-          title: "로그인 만료",
-          description: "세션이 만료되었습니다. 다시 로그인해주세요.",
-          variant: "destructive",
-        });
-        
-        // 로그인 페이지로 리다이렉트
-        navigate("/");
         prevSessionRef.current = null;
         return;
       }
-      
+
       if (event === "SIGNED_OUT" || (!session && wasLoggedIn)) {
-        // 세션이 만료되거나 로그아웃된 경우
-        console.log("⚠️ [세션 만료] 로그인이 만료되었습니다");
         setIsLoggedIn(false);
-        
-        // 로그아웃 시 위치 조회 타임스탬프 제거하여 다음 로그인 시 위치를 다시 조회하도록 함
         localStorage.removeItem("lastLocationFetchTime");
-        
-        // 로그인 상태였다가 만료된 경우에만 알림 표시 후 로그인 페이지로 이동
-        if (wasLoggedIn) {
-          toast({
-            title: "로그인 만료",
-            description: "세션이 만료되었습니다. 다시 로그인해주세요.",
-            variant: "destructive",
-          });
-          
-          // 로그인 페이지로 리다이렉트
-          navigate("/");
-        }
       } else if (event === "SIGNED_IN" || (session && isNowLoggedIn)) {
         // 로그인되거나 토큰이 갱신된 경우
         console.log("✅ [세션 유지/갱신] 로그인 상태 유지");
@@ -629,14 +599,6 @@ const Main = () => {
   }, [toast, navigate]);
 
   const handleRefreshLocation = async () => {
-    if (!isLoggedIn) {
-      toast({
-        title: "로그인 필요",
-        description: "위치 기반 매장 검색을 이용하려면 로그인이 필요합니다.",
-      });
-      return;
-    }
-    
     console.log("🔄🔄🔄 [수동 새로고침] 위치 재조회 시작 🔄🔄🔄");
 
     console.log("🔄 [수동 새로고침 전] localStorage 상태:", Object.keys(localStorage).filter(key => key.includes('location') || key.includes('Location')).reduce((obj, key) => {
@@ -1379,17 +1341,8 @@ const Main = () => {
             <Button 
               variant="outline" 
               className="group flex-1 justify-start h-12 rounded-xl border-border/50 hover:border-primary/50 transition-colors"
-              disabled={isLoadingLocation || !isLoggedIn}
-              onClick={() => {
-                if (isLoggedIn) {
-                  navigate('/location');
-                } else {
-                  toast({
-                    title: "로그인 필요",
-                    description: "위치 설정을 이용하려면 로그인이 필요합니다.",
-                  });
-                }
-              }}
+              disabled={isLoadingLocation}
+              onClick={() => navigate('/location')}
             >
               <div className="flex items-center">
                 {isLoadingLocation ? (
@@ -1408,7 +1361,7 @@ const Main = () => {
               variant="outline"
               size="icon"
               className="h-12 w-12 rounded-xl border-border/50 hover:border-primary/50 transition-colors"
-              disabled={isLoadingLocation || !isLoggedIn}
+              disabled={isLoadingLocation}
               onClick={handleRefreshLocation}
               aria-label="위치 새로고침"
             >
@@ -1459,8 +1412,7 @@ const Main = () => {
               {sortedStores.map((store) => (
                 <StoreCard 
                   key={store.id} 
-                  {...store} 
-                  isLoggedIn={isLoggedIn}
+                  {...store}
                 />
               ))}
             </div>

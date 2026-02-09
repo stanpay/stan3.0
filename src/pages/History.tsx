@@ -59,9 +59,6 @@ const History = () => {
         }
       } else {
         setIsLoggedIn(false);
-        // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
-        navigate("/");
-        return;
       }
       
       setLoading(false);
@@ -199,7 +196,7 @@ const History = () => {
         <div className="space-y-6">
           {Object.keys(groupedPayments).length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              {isLoggedIn ? "결제 내역이 없습니다" : "로그인 후 이용해주세요"}
+              {isLoggedIn ? "결제 내역이 없습니다" : "결제 내역이 없습니다"}
             </div>
           ) : (
             Object.entries(groupedPayments).map(([date, datePayments]) => (

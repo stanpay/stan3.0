@@ -155,8 +155,7 @@ const TutorialMain = () => {
               className={index === 0 ? "pointer-events-auto" : "pointer-events-none"}
             >
               <StoreCard 
-                {...store} 
-                isLoggedIn={true}
+                {...store}
                 tutorialMode
                 isHighlighted={false}
                 disabled={index > 0}

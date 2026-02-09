@@ -38,15 +38,13 @@ const DiscountCoupon = () => {
         await loadCoupons(session.user.id);
       } else {
         setIsLoggedIn(false);
-        navigate("/");
-        return;
       }
       
       setLoading(false);
     };
 
     checkUserAndLoadCoupons();
-  }, [navigate]);
+  }, []);
 
   const loadCoupons = async (userId: string) => {
     try {

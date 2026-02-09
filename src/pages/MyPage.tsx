@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ChevronRight, History, Settings, LogOut, Package, Zap, Ticket, BookOpen } from "lucide-react";
+import { ChevronRight, History, Settings, Package, Zap, Ticket, BookOpen } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -49,8 +49,7 @@ const MyPage = () => {
         const admin = await isOperator();
         setIsAdmin(admin);
       } else {
-        // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
-        navigate("/");
+        setLoading(false);
         return;
       }
       
@@ -87,36 +86,8 @@ const MyPage = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, []);
 
-  const handleLogout = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error("로그아웃 오류:", error);
-        toast({
-          title: "로그아웃 실패",
-          description: error.message || "로그아웃 중 오류가 발생했습니다.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      toast({
-        title: "로그아웃 되었습니다",
-      });
-      
-      // 세션이 완전히 삭제된 후에만 navigate
-      navigate("/", { replace: true });
-    } catch (error: any) {
-      console.error("로그아웃 처리 오류:", error);
-      toast({
-        title: "로그아웃 실패",
-        description: error.message || "로그아웃 처리 중 오류가 발생했습니다.",
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleTutorial = () => {
     navigate("/tutorial");
@@ -220,24 +191,6 @@ const MyPage = () => {
           </div>
         )}
 
-        {/* Login/Logout Button */}
-        {isLoggedIn ? (
-          <Button
-            variant="outline"
-            className="w-full h-12 rounded-xl border-border/50"
-            onClick={handleLogout}
-          >
-            <LogOut className="w-5 h-5 mr-2" />
-            로그아웃
-          </Button>
-        ) : (
-          <Button
-            className="w-full h-12 rounded-xl"
-            onClick={() => navigate("/")}
-          >
-            로그인
-          </Button>
-        )}
       </main>
 
       <BottomNav />

@@ -35,7 +35,7 @@ const ChatSupport = () => {
 
   const getPageName = (path: string) => {
     const pageNames: Record<string, string> = {
-      "/": "로그인",
+      "/": "메인",
       "/main": "메인",
       "/location": "위치 설정",
       "/sell": "판매하기",

@@ -153,9 +153,9 @@ const AdminRoute = ({ children }: AdminRouteProps) => {
     );
   }
 
-  // 권한 확인이 완료되었고 관리자가 아니면 로그인 페이지로 리다이렉트
+  // 권한 확인이 완료되었고 관리자가 아니면 메인으로 리다이렉트
   if (!isAdmin) {
-    return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/main" replace state={{ from: location.pathname }} />;
   }
 
   // 권한 확인이 완료되었지만 아직 인증되지 않았으면 로딩 표시

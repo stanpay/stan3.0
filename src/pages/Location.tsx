@@ -23,14 +23,6 @@ const Location = () => {
   const [recentLocations, setRecentLocations] = useState<RecentLocation[]>([]);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/");
-      }
-    };
-    checkAuth();
-
     // 최근 위치 불러오기
     const savedLocations = localStorage.getItem("recentLocations");
     if (savedLocations) {
@@ -40,7 +32,7 @@ const Location = () => {
         console.error("최근 위치 불러오기 오류:", error);
       }
     }
-  }, [navigate]);
+  }, []);
 
   // 검색 로직 (debounce 적용)
   useEffect(() => {

@@ -352,9 +352,6 @@ const MyGifticons = () => {
         }
     } else {
       setIsLoggedIn(false);
-      // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
-      navigate("/");
-      return;
     }
     
     setLoading(false);
@@ -362,7 +359,7 @@ const MyGifticons = () => {
 
   useEffect(() => {
     loadGifticons();
-  }, [navigate]);
+  }, []);
 
   const filteredGifticons = gifticons.filter((gifticon) => {
     if (filterStatus === "사용 가능") {
@@ -1016,7 +1013,7 @@ const MyGifticons = () => {
         <div className="grid grid-cols-2 gap-4">
           {sortedGifticons.length === 0 ? (
             <div className="col-span-2 text-center py-12 text-muted-foreground">
-              {isLoggedIn ? "기프티콘이 없습니다" : "로그인 후 이용해주세요"}
+              {isLoggedIn ? "기프티콘이 없습니다" : "기프티콘이 없습니다"}
             </div>
           ) : (
             sortedGifticons.map((gifticon) => (

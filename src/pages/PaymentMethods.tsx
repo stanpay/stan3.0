@@ -51,9 +51,6 @@ const PaymentMethods = () => {
         }
       } else {
         setIsLoggedIn(false);
-        // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
-        navigate("/");
-        return;
       }
       
       setLoading(false);
@@ -65,7 +62,7 @@ const PaymentMethods = () => {
   const handleToggle = async (method: keyof typeof paymentMethods) => {
     if (!isLoggedIn) {
       toast({
-        title: "로그인이 필요합니다",
+        title: "설정을 변경할 수 없습니다",
         variant: "destructive",
       });
       return;
@@ -122,7 +119,7 @@ const PaymentMethods = () => {
 
         {!isLoggedIn && (
           <div className="text-center py-4 mb-4 text-muted-foreground bg-card rounded-xl border border-border">
-            로그인 후 이용해주세요
+            결제 수단 설정을 사용할 수 없습니다
           </div>
         )}
 

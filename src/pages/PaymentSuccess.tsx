@@ -27,7 +27,7 @@ const PaymentSuccess = () => {
         const { data: { user } } = await supabase.auth.getUser();
         
         if (!user) {
-          setError('로그인이 필요합니다.');
+          setError('세션이 필요합니다.');
           setTimeout(() => navigate('/'), 2000);
           return;
         }

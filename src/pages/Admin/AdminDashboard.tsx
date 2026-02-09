@@ -249,7 +249,7 @@ const AdminDashboard = () => {
   // 로그아웃
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    navigate("/admin/login");
+    navigate("/main");
   };
 
   const getStatusBadge = (status: string) => {

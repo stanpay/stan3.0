@@ -51,8 +51,8 @@ const SellResult = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        toast.error("로그인이 필요합니다.");
-        navigate("/");
+        toast.error("세션이 필요합니다. 페이지를 새로고침해주세요.");
+        navigate("/main");
         return;
       }
 
@@ -239,7 +239,7 @@ const SellResult = () => {
       setIsProcessing(true);
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        toast.error("로그인이 필요합니다.");
+        toast.error("세션이 필요합니다.");
         return;
       }
 
@@ -330,7 +330,7 @@ const SellResult = () => {
       setIsProcessing(true);
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        toast.error("로그인이 필요합니다.");
+        toast.error("세션이 필요합니다.");
         return;
       }
 

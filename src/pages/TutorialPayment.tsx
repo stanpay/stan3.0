@@ -825,13 +825,13 @@ const TutorialPayment = () => {
     }
 
     if (!isLoggedIn || !storeBrand) {
-      toast.error("로그인이 필요합니다.");
+      toast.error("세션이 필요합니다.");
       return;
     }
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) {
-      toast.error("로그인이 필요합니다.");
+      toast.error("세션이 필요합니다.");
       return;
     }
 
@@ -1485,13 +1485,13 @@ const TutorialPayment = () => {
       }
 
       if (!isLoggedIn) {
-        toast.error("로그인이 필요합니다.");
+        toast.error("세션이 필요합니다.");
         return;
       }
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
-        toast.error("로그인이 필요합니다.");
+        toast.error("세션이 필요합니다.");
         return;
       }
 
@@ -2471,8 +2471,8 @@ const TutorialPayment = () => {
                     const orderData = JSON.parse(orderDataStr);
                     const { data: { session } } = await supabase.auth.getSession();
                     if (!session) {
-                      toast.error('로그인이 필요합니다.');
-                      navigate('/');
+                      toast.error('세션이 필요합니다.');
+                      navigate('/main');
                       return;
                     }
 
@@ -2705,12 +2705,6 @@ const TutorialPayment = () => {
                             <p className="font-bold text-sm">{membershipName}</p>
                           </div>
                         </div>
-                        {storeId === "starbucks" && (
-                          <div className="flex items-center gap-2 text-xs pl-[44px]">
-                            <span className="text-muted-foreground">적립 가능 별:</span>
-                            <span>⭐⭐⭐</span>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </Card>

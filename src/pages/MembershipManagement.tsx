@@ -70,7 +70,7 @@ const MembershipManagement = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          navigate("/");
+          setLoading(false);
           return;
         }
         setIsLoggedIn(true);
@@ -120,7 +120,7 @@ const MembershipManagement = () => {
   const handleToggle = async (key: MembershipKey) => {
     if (!isLoggedIn) {
       toast({
-        title: "로그인이 필요합니다.",
+        title: "멤버십 설정을 변경할 수 없습니다.",
         variant: "destructive",
       });
       return;
@@ -190,7 +190,7 @@ const MembershipManagement = () => {
 
         {!isLoggedIn && (
           <div className="text-center py-4 mb-4 text-muted-foreground bg-card rounded-xl border border-border">
-            로그인 후 이용해주세요.
+            멤버십 관리를 사용할 수 없습니다.
           </div>
         )}
 

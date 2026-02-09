@@ -1108,12 +1108,6 @@ const Payment = () => {
         }
       }
 
-      if (!loggedIn) {
-        // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
-        console.log("🔐 [Payment] 로그인 필요 - 로그인 페이지로 이동");
-        navigate("/");
-        return;
-      }
     };
     checkAuth();
   }, []);
@@ -1124,31 +1118,14 @@ const Payment = () => {
       const wasLoggedIn = !!prevSessionRef.current;
       const isNowLoggedIn = !!session;
       
-      // INITIAL_SESSION 이벤트 처리: 세션이 없고 이전에 로그인 상태였다면 로그아웃으로 간주
       if (event === "INITIAL_SESSION" && !session && wasLoggedIn) {
-        console.log("⚠️ [Payment] 세션 만료 - 로그인 페이지로 이동");
         setIsLoggedIn(false);
-        
-        toast.error("세션이 만료되었습니다. 다시 로그인해주세요.");
-        
-        // 로그인 페이지로 리다이렉트
-        navigate("/");
         prevSessionRef.current = null;
         return;
       }
-      
+
       if (event === "SIGNED_OUT" || (!session && wasLoggedIn)) {
-        // 세션이 만료되거나 로그아웃된 경우
-        console.log("⚠️ [Payment] 로그아웃 감지 - 로그인 페이지로 이동");
         setIsLoggedIn(false);
-        
-        // 로그인 상태였다가 만료된 경우에만 알림 표시 후 로그인 페이지로 이동
-        if (wasLoggedIn) {
-          toast.error("세션이 만료되었습니다. 다시 로그인해주세요.");
-          
-          // 로그인 페이지로 리다이렉트
-          navigate("/");
-        }
       } else if (event === "SIGNED_IN" || (session && isNowLoggedIn)) {
         // 로그인되거나 토큰이 갱신된 경우
         setIsLoggedIn(true);
@@ -1485,13 +1462,13 @@ const Payment = () => {
     }
 
     if (!isLoggedIn || !storeBrand) {
-      toast.error("로그인이 필요합니다.");
+      toast.error("세션이 필요합니다.");
       return;
     }
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) {
-      toast.error("로그인이 필요합니다.");
+      toast.error("세션이 필요합니다.");
       return;
     }
 
@@ -2145,13 +2122,13 @@ const Payment = () => {
       }
 
       if (!isLoggedIn) {
-        toast.error("로그인이 필요합니다.");
+        toast.error("세션이 필요합니다.");
         return;
       }
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
-        toast.error("로그인이 필요합니다.");
+        toast.error("세션이 필요합니다.");
         return;
       }
 
@@ -2274,13 +2251,13 @@ const Payment = () => {
 
 
     if (!isLoggedIn) {
-      toast.error("로그인이 필요합니다.");
+      toast.error("세션이 필요합니다.");
       return;
     }
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) {
-      toast.error("로그인이 필요합니다.");
+      toast.error("세션이 필요합니다.");
       return;
     }
 
@@ -2414,7 +2391,7 @@ const Payment = () => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
-        toast.error("로그인이 필요합니다.");
+        toast.error("세션이 필요합니다.");
         navigate('/');
         return;
       }
@@ -3244,7 +3221,7 @@ const Payment = () => {
                     const orderData = JSON.parse(orderDataStr);
                     const { data: { session } } = await supabase.auth.getSession();
                     if (!session) {
-                      toast.error('로그인이 필요합니다.');
+                      toast.error('세션이 필요합니다.');
                       navigate('/');
                       return;
                     }
@@ -3460,12 +3437,6 @@ const Payment = () => {
                             <p className="font-bold text-sm">{membershipName}</p>
                           </div>
                         </div>
-                        {storeId === "starbucks" && (
-                          <div className="flex items-center gap-2 text-xs pl-[44px]">
-                            <span className="text-muted-foreground">적립 가능 별:</span>
-                            <span>⭐⭐⭐</span>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </Card>

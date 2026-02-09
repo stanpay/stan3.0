@@ -15,15 +15,6 @@ const Sell = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/");
-      }
-    };
-    checkAuth();
-  }, [navigate]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -47,8 +38,7 @@ const Sell = () => {
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        toast.error("로그인이 필요합니다.");
-        navigate("/");
+        toast.error("세션이 필요합니다. 페이지를 새로고침해주세요.");
         return;
       }
 

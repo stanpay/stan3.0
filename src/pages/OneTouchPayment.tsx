@@ -36,20 +36,18 @@ const OneTouchPayment = () => {
         }
       } else {
         setIsLoggedIn(false);
-        navigate("/");
-        return;
       }
       
       setLoading(false);
     };
 
     checkUserAndLoadSettings();
-  }, [navigate]);
+  }, []);
 
   const handleToggle = async (enabled: boolean) => {
     if (!isLoggedIn) {
       toast({
-        title: "로그인이 필요합니다",
+        title: "원터치 결제를 사용할 수 없습니다",
         variant: "destructive",
       });
       return;
@@ -71,7 +69,7 @@ const OneTouchPayment = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         toast({
-          title: "로그인이 필요합니다",
+          title: "원터치 결제를 사용할 수 없습니다",
           variant: "destructive",
         });
         return;
@@ -162,7 +160,7 @@ const OneTouchPayment = () => {
 
         {!isLoggedIn && (
           <div className="text-center py-4 mb-4 text-muted-foreground bg-card rounded-xl border border-border">
-            로그인 후 이용해주세요
+            원터치 결제를 사용할 수 없습니다
           </div>
         )}
 

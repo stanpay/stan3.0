@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CardStack } from "@/components/ui/card-stack";
-import { Gift, CreditCard, ExternalLink, Monitor, User, Plus } from "lucide-react";
+import { Gift, CreditCard, ExternalLink, Monitor, User, Plus, ChevronUp } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useState, useEffect, useRef, useMemo } from "react";
 import JsBarcode from "jsbarcode";
@@ -246,15 +246,20 @@ const BarcodePrototype = () => {
               className="relative w-full h-[320px] shrink-0"
               cardClassName="absolute left-0 right-0 top-0 rounded-t-none rounded-b-2xl border border-border/50 bg-card shadow-lg overflow-hidden flex flex-col h-[280px] w-full"
             />
-          </div>
-          {/* 스크롤 진행 인디케이터 - 바코드 하단 */}
-          <div
-            className="flex items-center justify-center gap-1.5 py-2 shrink-0 px-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <span className="text-sm text-muted-foreground">
-              {kioskCurrentIndex + 1} / {totalCards}
-            </span>
+            {/* 위로 스와이프 안내 - 바코드 스택 바로 아래 */}
+            <div className="flex flex-col items-center gap-2 pt-2 shrink-0 px-4">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <ChevronUp
+                  className="w-5 h-5 animate-bounce"
+                  style={{ animationDuration: "1.5s" }}
+                  aria-hidden
+                />
+                <span className="text-sm">위로 스크롤하여 다음 바코드로 넘김</span>
+              </div>
+              <span className="text-xs text-muted-foreground/80">
+                {kioskCurrentIndex + 1} / {totalCards}
+              </span>
+            </div>
           </div>
         </div>
       )}
