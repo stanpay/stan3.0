@@ -261,6 +261,27 @@ const BarcodePrototype = () => {
               </span>
             </div>
           </div>
+          {/* 키오스크 하단 버튼 영역 */}
+          <div
+            className="absolute bottom-4 left-4 right-4 space-y-3 z-50"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Button
+              onClick={() => console.log("결제앱 실행")}
+              className="w-full h-14 text-lg font-semibold rounded-xl opacity-50"
+            >
+              결제앱 실행
+            </Button>
+            <Button
+              onClick={() => {
+                console.log("결제 완료");
+                navigate(-1);
+              }}
+              className="w-full h-14 text-lg font-semibold rounded-xl"
+            >
+              결제 완료
+            </Button>
+          </div>
         </div>
       )}
 

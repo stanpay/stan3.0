@@ -51,6 +51,7 @@ const App = () => (
           <Route path="/sell/result/:jobId/detail" element={<SellResultDetail />} />
           <Route path="/payment/:storeId" element={<Payment />} />
           <Route path="/tutorial/payment/:storeId" element={<TutorialPayment />} />
+          {/* 프로토타입 라우트: 인증 없이 배포 환경에서 직접 접근 가능 */}
           <Route path="/prototype/barcode/:storeId" element={<BarcodePrototype />} />
           <Route path="/mypage" element={<MyPage />} />
           <Route path="/my-gifticons" element={<MyGifticons />} />
