@@ -14,6 +14,7 @@ import SellResult from "./pages/SellResult";
 import SellResultDetail from "./pages/SellResultDetail";
 import Payment from "./pages/Payment";
 import TutorialPayment from "./pages/TutorialPayment";
+import BarcodePrototype from "./pages/BarcodePrototype";
 import MyPage from "./pages/MyPage";
 import MyGifticons from "./pages/MyGifticons";
 import History from "./pages/History";
@@ -54,6 +55,7 @@ const App = () => (
           <Route path="/sell/result/:jobId/detail" element={<ProtectedRoute><SellResultDetail /></ProtectedRoute>} />
           <Route path="/payment/:storeId" element={<ProtectedRoute><Payment /></ProtectedRoute>} />
           <Route path="/tutorial/payment/:storeId" element={<ProtectedRoute><TutorialPayment /></ProtectedRoute>} />
+          <Route path="/prototype/barcode/:storeId" element={<BarcodePrototype />} />
           <Route path="/mypage" element={<ProtectedRoute><MyPage /></ProtectedRoute>} />
           <Route path="/my-gifticons" element={<ProtectedRoute><MyGifticons /></ProtectedRoute>} />
           <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
