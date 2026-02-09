@@ -254,7 +254,7 @@ const BarcodePrototype = () => {
                   style={{ animationDuration: "1.5s" }}
                   aria-hidden
                 />
-                <span className="text-sm">위로 스크롤하여 다음 바코드로 넘김</span>
+                <span className="text-sm">위로 스와이프하여 다음 바코드로 넘김</span>
               </div>
               <span className="text-xs text-muted-foreground/80">
                 {kioskCurrentIndex + 1} / {totalCards}
