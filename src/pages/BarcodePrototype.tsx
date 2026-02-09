@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CardStack } from "@/components/ui/card-stack";
-import { Gift, CreditCard, ExternalLink, Monitor, User } from "lucide-react";
+import { Gift, CreditCard, ExternalLink, Monitor, User, Plus } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useState, useEffect, useRef, useMemo } from "react";
 import JsBarcode from "jsbarcode";
@@ -362,12 +362,22 @@ const BarcodePrototype = () => {
               className="p-0 rounded-2xl border-border/50 relative overflow-hidden cursor-pointer"
               onClick={enterKioskMode}
             >
-              {/* 바코드 영역 - 추후 서비스 예정 (윗공간·아래공간 기프티콘/멤버십 기준 통일) */}
-              <div className="rounded-t-2xl h-[130px] bg-muted border border-border/50 border-b-0 px-4 pt-3 pb-1.5 relative flex flex-col items-center justify-center">
-                <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
+              {/* 바코드 영역 - 이미지 업로드 등록 */}
+              <div className="rounded-t-2xl h-[130px] bg-muted border border-border/50 border-b-0 px-4 pt-3 pb-1.5 relative flex flex-col items-center justify-center gap-2">
+                <div className="absolute inset-0 flex items-center justify-center opacity-[0.05] pointer-events-none">
                   <BarcodeDisplay number={membershipInfo.barcode} />
                 </div>
-                <div className="absolute inset-0 bg-muted/70 pointer-events-none" aria-hidden />
+                <button
+                  type="button"
+                  className="w-12 h-12 rounded-full border-2 border-dashed border-primary flex items-center justify-center text-primary hover:border-primary/80 hover:text-primary/80 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log("바코드 이미지 업로드");
+                  }}
+                >
+                  <Plus className="w-6 h-6" />
+                </button>
+                <p className="text-xs text-muted-foreground">+버튼을 눌러 바코드를 등록하세요</p>
               </div>
               {/* 멤버십 정보 영역 - 별도 블록 */}
               <div
@@ -397,12 +407,6 @@ const BarcodePrototype = () => {
                     앱 실행
                   </Button>
                 </div>
-                {storeId === "starbucks" && (
-                  <div className="flex items-center gap-2 text-xs pl-[44px]">
-                    <span className="text-muted-foreground">적립 가능 별:</span>
-                    <span>⭐⭐⭐</span>
-                  </div>
-                )}
               </div>
             </Card>
           </div>
