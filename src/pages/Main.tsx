@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import StoreCard from "@/components/StoreCard";
 import BottomNav from "@/components/BottomNav";
 import { Link, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,6 +46,8 @@ const Main = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showTutorialModal, setShowTutorialModal] = useState(false);
   const [hasPaymentHistory, setHasPaymentHistory] = useState<boolean | null>(null);
+  const [isMapView, setIsMapView] = useState(false);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
 
   const getAddressFromCoords = async (latitude: number, longitude: number) => {
     try {
@@ -1327,6 +1329,93 @@ const Main = () => {
     }
   });
 
+  const storesWithCoords = sortedStores.filter(
+    (store) => typeof store.lat === "number" && typeof store.lon === "number"
+  );
+
+  useEffect(() => {
+    if (!isMapView || !mapContainerRef.current) return;
+
+    let isCancelled = false;
+    let markers: any[] = [];
+    let infoWindow: any = null;
+
+    const initializeMap = async () => {
+      try {
+        const { loadKakaoMaps } = await import("@/lib/kakao");
+        await loadKakaoMaps();
+
+        if (isCancelled || !mapContainerRef.current) return;
+
+        const kakao = (window as any).kakao;
+        if (!kakao?.maps) return;
+
+        const defaultCenter = currentCoords
+          ? new kakao.maps.LatLng(currentCoords.latitude, currentCoords.longitude)
+          : storesWithCoords.length > 0
+            ? new kakao.maps.LatLng(storesWithCoords[0].lat, storesWithCoords[0].lon)
+            : new kakao.maps.LatLng(37.5665, 126.978);
+
+        const map = new kakao.maps.Map(mapContainerRef.current, {
+          center: defaultCenter,
+          level: 5,
+        });
+
+        const bounds = new kakao.maps.LatLngBounds();
+        infoWindow = new kakao.maps.InfoWindow({ zIndex: 10 });
+
+        if (currentCoords) {
+          const currentMarker = new kakao.maps.Marker({
+            position: new kakao.maps.LatLng(currentCoords.latitude, currentCoords.longitude),
+            title: "현재 위치",
+          });
+          currentMarker.setMap(map);
+          markers.push(currentMarker);
+          bounds.extend(currentMarker.getPosition());
+        }
+
+        storesWithCoords.forEach((store) => {
+          const position = new kakao.maps.LatLng(store.lat, store.lon);
+          const marker = new kakao.maps.Marker({
+            position,
+            title: store.name,
+          });
+
+          marker.setMap(map);
+          markers.push(marker);
+          bounds.extend(position);
+
+          kakao.maps.event.addListener(marker, "click", () => {
+            const content = `
+              <div style="padding:10px;min-width:180px;line-height:1.4;">
+                <strong style="font-size:13px;">${store.name}</strong>
+                <div style="margin-top:4px;color:#666;font-size:12px;">${store.distance}</div>
+              </div>
+            `;
+            infoWindow.setContent(content);
+            infoWindow.open(map, marker);
+          });
+        });
+
+        if (!bounds.isEmpty()) {
+          map.setBounds(bounds);
+        }
+      } catch (error) {
+        console.error("❌ [지도뷰] 초기화 실패:", error);
+      }
+    };
+
+    initializeMap();
+
+    return () => {
+      isCancelled = true;
+      markers.forEach((marker) => marker.setMap(null));
+      if (infoWindow) {
+        infoWindow.close();
+      }
+    };
+  }, [isMapView, storesWithCoords, currentCoords]);
+
   return (
     <div className="min-h-screen bg-background pb-20">
       <TutorialModal 
@@ -1373,15 +1462,26 @@ const Main = () => {
 
       {/* Store Grid */}
       <main className="max-w-md mx-auto px-4 py-6">
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="매장 검색..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-12 pl-10 pr-4 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
-          />
+        <div className="mb-4 flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="매장 검색..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-12 pl-10 pr-4 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 px-3 rounded-xl whitespace-nowrap"
+            onClick={() => setIsMapView((prev) => !prev)}
+            disabled={isLoadingStores || storesWithCoords.length === 0}
+          >
+            {isMapView ? "리스트 보기" : "지도뷰 보기"}
+          </Button>
         </div>
         <div className="mb-6 flex items-center justify-between">
           <div>
@@ -1405,6 +1505,16 @@ const Main = () => {
           <div className="flex flex-col items-center justify-center py-12">
             <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
             <p className="text-muted-foreground">매장 정보를 불러오는 중...</p>
+          </div>
+        ) : isMapView ? (
+          <div className="animate-fade-in">
+            <div className="text-sm text-muted-foreground mb-3">
+              총 {storesWithCoords.length}개 매장이 지도에 표시됩니다.
+            </div>
+            <div
+              ref={mapContainerRef}
+              className="w-full h-[65vh] rounded-lg border border-border bg-card"
+            />
           </div>
         ) : sortedStores.length > 0 ? (
           <>

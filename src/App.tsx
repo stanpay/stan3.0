@@ -3,7 +3,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import AdminRoute from "./components/AdminRoute";
 import Main from "./pages/Main";
 import TutorialMain from "./pages/TutorialMain";
 import Location from "./pages/Location";
@@ -23,7 +22,6 @@ import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFail from "./pages/PaymentFail";
 import NotFound from "./pages/NotFound";
 import ChatSupport from "./components/ChatSupport";
-import AdminDashboard from "./pages/Admin/AdminDashboard";
 import MembershipManagement from "./pages/MembershipManagement";
 import LandingPage from "./pages/Landing/LandingPage";
 
@@ -62,8 +60,6 @@ const App = () => (
           <Route path="/membership-management" element={<MembershipManagement />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/payment-fail" element={<PaymentFail />} />
-          {/* Admin Routes */}
-          <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
